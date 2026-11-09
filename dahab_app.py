@@ -126,7 +126,8 @@ def open_window(url, cfg):
         return None
     args = [exe, f"--app={url}", f"--user-data-dir={os.path.join(bootstrap.data_dir(), 'browser')}",
             "--no-first-run", "--no-default-browser-check", "--disable-background-mode",
-            "--disable-sync", "--start-maximized", "--lang=ar", "--disable-features=Translate"]
+            "--disable-sync", "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows", "--start-maximized", "--lang=ar", "--disable-features=Translate"]
     if cfg.get("silent_print"):
         args.append("--kiosk-printing")             # طباعة مباشرة بلا نافذة تأكيد
     if os.name != "nt" and hasattr(os, "geteuid") and os.geteuid() == 0:
@@ -252,15 +253,17 @@ def main(argv=None):
             A.start_cloud()                      # نشر العروض + فحص التحديثات في الخلفية
         proc = None if (opts.headless or opts.restarted) else open_window(url, cfg)
         started = last_loop = time.time()
-        stale_after = float(os.environ.get("DAHAB_STALE", 25))
-        first_ping_wait = float(os.environ.get("DAHAB_FIRST", 300))
+        stale_after = float(os.environ.get("DAHAB_STALE", 150))     # النافذة أُغلقت + لا نشاط
+        first_ping_wait = float(os.environ.get("DAHAB_FIRST", 900))  # لم تُفتح الصفحة قط
+        idle_exit = float(os.environ.get("DAHAB_IDLE", 900))         # لا نبضات إطلاقًا (حتى لو بدا أن النافذة موجودة)
         pinged = False
         while not stopping.wait(2):
             now = time.time()
             if now - last_loop > 30:             # الجهاز كان نائمًا: لا تعتبر الصفحة ميتة
                 A.LAST_PING[0] = now
             last_loop = now
-            age = now - A.LAST_PING[0]
+            act = max(A.LAST_PING[0], A.LAST_ACTIVITY[0])           # أي طلب من الصفحة = دليل أنها حيّة
+            age = now - act
             pinged = pinged or A.LAST_PING[0] > started
             window_gone = proc is None or proc.poll() is not None
             if not confirmed and (pinged or now - started > float(os.environ.get("DAHAB_CONFIRM", 40))):
@@ -275,11 +278,12 @@ def main(argv=None):
                 break
             if opts.headless:
                 continue
-            if window_gone and ((pinged and age > stale_after) or (not pinged and now - started > first_ping_wait)):
-                log.info("إغلاق: النافذة مغلقة (pinged=%s, آخر نبضة قبل %.0fث)", pinged, age)
+            # لا نقفل السيرفر بسرعة: المتصفح يبطّئ مؤقتات الصفحة المصغّرة/المغطاة فتقلّ النبضات (قفل خاطئ = مشكلة للمحل)
+            if window_gone and age > (stale_after if pinged else first_ping_wait):
+                log.info("إغلاق: النافذة أُغلقت (pinged=%s, آخر نشاط قبل %.0fث)", pinged, age)
                 break
-            if pinged and age > 120:             # المتصفح ما زال يعمل لكن الصفحة مغلقة
-                log.info("إغلاق: لا نبضات من الصفحة منذ %.0fث", age)
+            if age > idle_exit:
+                log.info("إغلاق: لا أي نشاط منذ %.0fث", age)
                 break
 
     log.info("إيقاف التشغيل…")
