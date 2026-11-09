@@ -253,7 +253,7 @@ def main(argv=None):
         proc = None if (opts.headless or opts.restarted) else open_window(url, cfg)
         started = last_loop = time.time()
         stale_after = float(os.environ.get("DAHAB_STALE", 25))
-        first_ping_wait = float(os.environ.get("DAHAB_FIRST", 45))
+        first_ping_wait = float(os.environ.get("DAHAB_FIRST", 300))
         pinged = False
         while not stopping.wait(2):
             now = time.time()
@@ -276,8 +276,10 @@ def main(argv=None):
             if opts.headless:
                 continue
             if window_gone and ((pinged and age > stale_after) or (not pinged and now - started > first_ping_wait)):
+                log.info("إغلاق: النافذة مغلقة (pinged=%s, آخر نبضة قبل %.0fث)", pinged, age)
                 break
             if pinged and age > 120:             # المتصفح ما زال يعمل لكن الصفحة مغلقة
+                log.info("إغلاق: لا نبضات من الصفحة منذ %.0fث", age)
                 break
 
     log.info("إيقاف التشغيل…")

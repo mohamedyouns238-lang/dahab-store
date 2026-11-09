@@ -30,10 +30,11 @@
 <div id="glow" aria-hidden="true"></div>
 <script>
 var pingFails = 0;
-setInterval(function () {
+function doPing() {
   fetch('/ping', {cache: 'no-store'}).then(function () { pingFails = 0; var n = document.getElementById('netbar'); if (n) n.style.display = 'none'; })
     .catch(function () { if (++pingFails >= 2) { var n = document.getElementById('netbar'); if (n) n.style.display = 'block'; } });
-}, 15000);
+}
+doPing(); setInterval(doPing, 15000);
 (function () {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || matchMedia('(hover: none)').matches) return;
   var g = document.getElementById('glow'), sel = '.card,.kpi,.side a,.btn,tbody tr', raf = 0, ex = 0, ey = 0, tg = null;
