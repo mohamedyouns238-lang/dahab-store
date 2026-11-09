@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ 'منتج جديد' if new else 'تعديل منتج' }}{% endblock %}
+{% block content %}
+<h2>{{ 'إضافة منتج' if new else 'تعديل منتج' }}</h2>
+<form method="post" class="card" id="pf" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <div class="f">
+    <div><label>اسم المنتج *</label><input name="name" value="{{ p.get('name', '') }}" required></div>
+    <div><label>الباركود (امسحه بالقارئ أو اتركه فارغًا)</label>
+      <div class="row" style="flex-wrap:nowrap"><input name="barcode" id="barcode" value="{{ p.get('barcode') or '' }}" autocomplete="off" style="flex:1">
+      <button type="button" class="btn sec sm" id="gen">توليد</button></div></div>
+    <div><label>الفئة</label><select name="category_id"><option value="">—</option>
+      {% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if p.get('category_id')|string == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></div>
+    <div><label>الماركة</label><select name="brand_id"><option value="">—</option>
+      {% for b in brands %}<option value="{{ b.id }}" {{ 'selected' if p.get('brand_id')|string == b.id|string }}>{{ b.name }}</option>{% endfor %}</select></div>
+    <div><label>سعر التكلفة</label><input name="cost" type="number" step="0.01" min="0" value="{{ p.get('cost', 0) }}"></div>
+    <div><label>سعر البيع *</label><input name="price" type="number" step="0.01" min="0" value="{{ p.get('price', 0) }}" required></div>
+    <div><label>الكمية الحالية بالمخزون</label><input name="stock" type="number" min="0" value="{{ p.get('stock', 0) }}"></div>
+    <div><label>الحد الأدنى للكمية (تنبيه النقص)</label><input name="min_qty" type="number" min="0" value="{{ p.get('min_qty', 0) }}"></div>
+    <div><label>صورة المنتج (اختياري)</label><input name="image" type="file" accept="image/*" id="imgin">
+      <div class="row" style="margin-top:6px"><img class="thumb big" id="imgprev" alt="" {% if p.get('image') %}src="{{ img_url(p.get('image')) }}"{% else %}style="display:none"{% endif %}>
+      {% if not new and p.get('image') %}<label style="margin:0;color:inherit"><input type="checkbox" name="remove_image" value="1"> إزالة الصورة</label>{% endif %}</div></div>
+  </div>
+  <div class="row" style="margin-top:16px">
+    <button class="btn">حفظ</button>
+    {% if new %}<button class="btn sec" name="again" value="1">حفظ وإضافة آخر</button>{% endif %}
+    <a class="btn sec" href="{{ url_for('products') }}">إلغاء</a>
+  </div>
+</form>
+<script>
+// قارئ الباركود يرسل Enter بعد القراءة: نمنع إرسال النموذج ونتحرك للحقل التالي
+const bc = document.getElementById('barcode');
+bc.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); document.querySelector('[name=category_id]').focus(); } });
+document.getElementById('imgin').onchange = e => { const fl = e.target.files[0]; const im = document.getElementById('imgprev'); if (fl) { im.src = URL.createObjectURL(fl); im.style.display = ''; } };
+document.getElementById('gen').onclick = () => {
+  let d = '200' + Array.from({length: 9}, () => Math.floor(Math.random() * 10)).join('');
+  let s = 0; for (let i = 0; i < 12; i++) s += +d[i] * (i % 2 ? 3 : 1);
+  bc.value = d + ((10 - s % 10) % 10);
+};
+</script>
+{% endblock %}

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0b0b">
+<title>Dahab Store — العروض</title>
+<meta name="description" content="أحدث عروض Dahab Store">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b0b0b'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='%23d4af37' font-family='Georgia,serif' font-weight='700'%3ED%3C/text%3E%3C/svg%3E">
+<style>
+:root{--bg:#0b0b0b;--card:#141109;--ink:#f6eccb;--muted:#b9a56a;--gold:#d4af37;--gold-l:#f1d77a;--gold-d:#a8801c;--line:#3d3315;
+--pat:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cg fill='none' stroke='%23d4af37' stroke-opacity='.16' stroke-width='1'%3E%3Cpath d='M30 4l6 14 14-6-6 14 14 6-14 6 6 14-14-6-6 14-6-14-14 6 6-14-14-6 14-6-6-14 14 6z'/%3E%3Ccircle cx='30' cy='30' r='6'/%3E%3C/g%3E%3C/svg%3E")}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg) var(--pat);color:var(--ink);font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic",Arial,sans-serif;min-height:100vh;overflow-x:hidden}
+#glow{position:fixed;top:0;left:0;width:460px;height:460px;border-radius:50%;pointer-events:none;z-index:1;opacity:0;transition:opacity .3s;background:radial-gradient(circle,rgba(212,175,55,.18),rgba(212,175,55,.06) 40%,transparent 68%)}
+.stars{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.stars i{position:absolute;bottom:-30px;color:var(--gold);opacity:0;font-style:normal;animation:rise linear infinite}
+@keyframes rise{0%{transform:translateY(0) rotate(0);opacity:0}10%{opacity:.45}90%{opacity:.25}100%{transform:translateY(-110vh) rotate(360deg);opacity:0}}
+header{position:relative;z-index:2;text-align:center;padding:54px 16px 26px}
+.brand{font-family:"Amiri","Noto Naskh Arabic","Traditional Arabic",Georgia,serif;font-size:clamp(44px,9vw,78px);font-weight:700;margin:0;letter-spacing:2px;
+ background:linear-gradient(100deg,var(--gold-d),var(--gold-l),var(--gold),var(--gold-l),var(--gold-d));background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:shine 5s linear infinite}
+@keyframes shine{to{background-position:-250% 0}}
+.orn{color:var(--gold);letter-spacing:10px;font-size:14px;margin:6px 0 0;opacity:.9}
+.orn::before,.orn::after{content:"";display:block;height:1px;margin:10px auto;width:min(260px,60%);background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.tag{color:var(--muted);font-size:18px;margin:6px 0 0}
+.contact{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:999px;text-decoration:none;font-weight:700;font-size:16px;color:#17140d;
+ background:linear-gradient(135deg,var(--gold-l),var(--gold) 60%,var(--gold-d));transition:transform .18s,box-shadow .22s}
+.btn:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(212,175,55,.35)}
+.btn.wa{background:linear-gradient(135deg,#3ad07a,#1fa85a);color:#04210f}
+.btn.wa:hover{box-shadow:0 8px 22px rgba(37,211,102,.35)}
+main{position:relative;z-index:2;max-width:1100px;margin:0 auto;padding:10px 16px 60px}
+h2{font-size:26px;margin:20px 0 16px;color:var(--gold-l);text-align:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:20px}
+.card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;opacity:0;transform:translateY(26px);transition:opacity .6s,transform .6s,border-color .25s,box-shadow .3s}
+.card.in{opacity:1;transform:none}
+.card::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%),rgba(212,175,55,.22),transparent 62%)}
+.card:hover{border-color:var(--gold);box-shadow:0 10px 30px rgba(212,175,55,.22);transform:translateY(-6px)}
+.card:hover::after{opacity:1}
+.img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:#1b160a}
+.ph{display:flex;align-items:center;justify-content:center;font-size:54px;color:var(--gold);background:linear-gradient(135deg,#1b160a,#0f0c05) var(--pat)}
+.badge{position:absolute;top:12px;right:12px;background:linear-gradient(135deg,var(--gold-l),var(--gold-d));color:#17140d;font-weight:800;font-size:18px;padding:6px 14px;border-radius:999px;animation:pulse 2.2s ease-in-out infinite;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+@keyframes pulse{50%{transform:scale(1.08)}}
+.body{padding:16px}
+.body h3{margin:0 0 6px;font-size:20px;color:var(--gold-l)}
+.body p{margin:6px 0;color:var(--ink);opacity:.88;line-height:1.7}
+.prod{color:var(--muted);font-size:15px}
+.price{margin-top:8px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.price b{font-size:26px;color:var(--gold)}
+.price s{color:var(--muted)}
+.until{margin-top:8px;font-size:14px;color:var(--muted)}
+.soon{color:#ffcf6b}
+.empty{text-align:center;color:var(--muted);padding:50px 10px;font-size:19px}
+footer{position:relative;z-index:2;text-align:center;color:var(--muted);padding:26px 16px 40px;border-top:1px solid var(--line);font-size:15px}
+footer b{color:var(--gold-l)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.card{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div id="glow" aria-hidden="true"></div>
+<div class="stars" id="stars" aria-hidden="true"></div>
+<header>
+  <h1 class="brand">Dahab Store</h1>
+  <div class="orn">✦ ✧ ✦</div>
+  <p class="tag">أحدث العروض والخصومات</p>
+  <div class="contact" id="contact"></div>
+</header>
+<main>
+  <h2>العروض الحالية</h2>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" hidden>لا توجد عروض حاليًا — تابعونا قريبًا ✦</div>
+</main>
+<footer>© <b>Dahab Store</b> <span id="fphone"></span></footer>
+<script>
+(function(){
+  var $=function(s){return document.querySelector(s)};
+  function el(t,c,txt){var e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e}
+  function today(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
+  function money(n,cur){return Number(n).toLocaleString('ar-EG',{minimumFractionDigits:0,maximumFractionDigits:2})+' '+(cur||'')}
+  function waNumber(p){var d=(p||'').replace(/\D/g,'');if(!d)return '';if(d.indexOf('00')===0)d=d.slice(2);else if(d[0]==='0')d='20'+d.slice(1);return d}
+  // نجوم متحركة
+  var st=$('#stars');for(var i=0;i<16;i++){var s=el('i','', '✦');s.style.right=(Math.random()*100)+'%';s.style.fontSize=(10+Math.random()*18)+'px';s.style.animationDuration=(14+Math.random()*16)+'s';s.style.animationDelay=(-Math.random()*20)+'s';st.appendChild(s)}
+  // توهج الماوس
+  var g=$('#glow'),raf=0,ex=0,ey=0;
+  if(!matchMedia('(hover: none)').matches)document.addEventListener('pointermove',function(e){ex=e.clientX;ey=e.clientY;var c=e.target.closest&&e.target.closest('.card');
+    if(c){var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')}
+    if(raf)return;raf=requestAnimationFrame(function(){raf=0;g.style.opacity=1;g.style.transform='translate('+(ex-230)+'px,'+(ey-230)+'px)'})});
+  var io='IntersectionObserver' in window?new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}})},{threshold:.12}):null;
+
+  function render(data){
+    var t=today(),cur=data.currency||'',grid=$('#grid');grid.replaceChildren();
+    var list=(data.offers||[]).filter(function(o){return(!o.starts_on||o.starts_on<=t)&&(!o.ends_on||o.ends_on>=t)});
+    $('#empty').hidden=list.length>0;
+    list.forEach(function(o,i){
+      var c=el('article','card');c.style.transitionDelay=(Math.min(i,8)*70)+'ms';
+      if(o.image){var im=el('img','img');im.alt=o.title;im.loading='lazy';im.src=o.image;im.onerror=function(){var p=el('div','img ph','🏷️');im.replaceWith(p)};c.appendChild(im)}else c.appendChild(el('div','img ph','🏷️'));
+      if(o.percent>0)c.appendChild(el('div','badge','خصم '+Number(o.percent)+'%'));
+      var b=el('div','body');b.appendChild(el('h3','',o.title));
+      if(o.product)b.appendChild(el('div','prod',o.product));
+      if(o.details)b.appendChild(el('p','',o.details));
+      if(o.price_now!=null){var pr=el('div','price');pr.appendChild(el('b','',money(o.price_now,cur)));if(o.price_old)pr.appendChild(el('s','',money(o.price_old,cur)));b.appendChild(pr)}
+      if(o.ends_on){var left=Math.round((new Date(o.ends_on+'T00:00:00')-new Date(t+'T00:00:00'))/864e5);
+        b.appendChild(el('div','until'+(left<=3?' soon':''),left===0?'ينتهي اليوم!':(left<=3?'باقي '+left+' يوم فقط':'ساري حتى '+o.ends_on)))}
+      c.appendChild(b);grid.appendChild(c);
+      if(io)io.observe(c);else c.classList.add('in');
+    });
+    var phone=(data.phone||'').trim(),ct=$('#contact');ct.replaceChildren();
+    if(phone){var a=el('a','btn','📞 '+phone);a.href='tel:'+phone.replace(/[^\d+]/g,'');ct.appendChild(a);
+      var w=waNumber(phone);if(w){var wa=el('a','btn wa','واتساب');wa.href='https://wa.me/'+w;wa.target='_blank';wa.rel='noopener';ct.appendChild(wa)}
+      $('#fphone').textContent='— للتواصل: '+phone}
+  }
+  fetch('offers.json?_='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(render).catch(function(){render({offers:[]})});
+})();
+</script>
+</body>
+</html>

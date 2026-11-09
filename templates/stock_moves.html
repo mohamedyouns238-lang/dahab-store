@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager with context %}
+{% block title %}حركة المخزون{% endblock %}
+{% block content %}
+<h2>حركة المخزون (دفتر لا يُحذف)</h2>
+{% if bad %}<div class="flash err">يوجد {{ bad|length }} منتج رصيده لا يطابق الدفتر:
+  {% for b in bad[:8] %}«{{ b.name }}» (الرصيد {{ b.stock }} / الدفتر {{ b.ledger }}){{ '، ' if not loop.last }}{% endfor %} — اعمل جردًا لهذه الأصناف.</div>
+{% else %}<div class="flash ok">كل أرصدة المخزون مطابقة لدفتر الحركة ✔</div>{% endif %}
+<form class="card row" method="get">
+  <div><label>منتج / باركود / مرجع</label><input name="q" value="{{ s }}"></div>
+  <div><label>النوع</label><select name="reason"><option value="">الكل</option>{% for k, v in REASONS.items() %}<option value="{{ k }}" {{ 'selected' if reason == k }}>{{ v }}</option>{% endfor %}</select></div>
+  <button class="btn">بحث</button>
+</form>
+<div class="card tw"><table>
+  <tr><th>الوقت</th><th>المنتج</th><th>النوع</th><th>الكمية</th><th>المرجع</th><th>المستخدم</th><th>ملاحظة</th></tr>
+  {% for m in rows %}<tr><td class="num">{{ m.ts|dt }}</td><td>{{ m.pname }}</td><td><span class="tag">{{ REASONS.get(m.reason, m.reason) }}</span></td>
+    <td class="num {{ 'low' if m.delta < 0 else '' }}">{{ '%+d'|format(m.delta) }}</td><td>{{ m.ref or '-' }}</td><td>{{ m.uname or '-' }}</td><td>{{ m.note or '' }}</td></tr>
+  {% else %}<tr><td colspan="7" class="muted">لا توجد حركات</td></tr>{% endfor %}
+</table></div>
+{{ pager(page, pages) }}
+{% endblock %}

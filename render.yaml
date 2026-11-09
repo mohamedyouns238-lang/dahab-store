@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: dahab
+    runtime: python
+    plan: starter            # القرص الدائم يحتاج خطة مدفوعة؛ بدونه تضيع البيانات عند كل تحديث
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 4
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DB_PATH
+        value: /data/store.db
+      - key: SECRET_KEY
+        generateValue: true
+      - key: STORE_NAME
+        value: دهب

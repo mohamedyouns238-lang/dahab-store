@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card"><h2>{{ code }}</h2><p>{{ msg }}</p><a class="btn" href="{{ url_for('dashboard') }}">الرئيسية</a></div>
+{% endblock %}
+{% block guest %}
+<div class="login"><div class="card"><h2>{{ code }}</h2><p>{{ msg }}</p><a class="btn" href="{{ url_for('login') }}">تسجيل الدخول</a></div></div>
+{% endblock %}

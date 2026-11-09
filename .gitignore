@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+store.db*
+.secret_key
+backups/
+logs/
+images/
+corrupt/
+build/
+dist/
+output/
+
+build_defaults.json
+update_out/

@@ -1,0 +1,64 @@
+name: Build Windows installer
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-build.txt
+
+      - name: Run tests (informational on Windows)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          python test_smoke.py
+          python test_features.py
+          python test_safety.py
+
+      - name: Embed this repository name (so every install knows where to update from)
+        shell: pwsh
+        run: |
+          '{"repo": "${{ github.repository }}"}' | Out-File -Encoding ascii build_defaults.json
+
+      - name: Build app (PyInstaller)
+        run: pyinstaller DahabStore.spec --noconfirm
+
+      - name: Self-test the built DahabStore.exe
+        shell: pwsh
+        run: |
+          # يفحص النسخة المجمّعة نفسها (قوالب، ملفات static، قاعدة بيانات، تسجيل دخول، نسخ احتياطي) على بيانات مؤقتة
+          $p = Start-Process -FilePath "dist\DahabStore\DahabStore.exe" -ArgumentList "--selftest" -Wait -PassThru
+          Write-Host "exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "DahabStore.exe self-test failed (exit $($p.ExitCode))" }
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\DahabStore.iss'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DahabStore-Setup
+          path: output/DahabStore-Setup.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DahabStore-portable
+          path: dist/DahabStore
+          if-no-files-found: error

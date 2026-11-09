@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}فاتورة شراء{% endblock %}
+{% block content %}
+<h2>فاتورة شراء جديدة</h2>
+<div class="card">
+  <label>أضف صنفًا: امسح الباركود أو اكتب الاسم ثم Enter</label>
+  <input id="scan" style="width:100%;font-size:17px" autocomplete="off" autofocus>
+  <div id="results" style="display:none"></div>
+</div>
+<div class="card tw">
+  <table><thead><tr><th>المنتج</th><th>المخزون الحالي</th><th>الكمية</th><th>تكلفة الوحدة</th><th>الإجمالي</th><th></th></tr></thead><tbody id="cart"></tbody></table>
+  <p id="empty" class="muted" style="text-align:center">لم تتم إضافة أصناف</p>
+</div>
+<div class="card">
+  <div class="f">
+    <div><label>المورد (إجباري للآجل)</label><select id="sup"><option value="">— بدون —</option>{% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
+    <div><label>المبلغ المدفوع</label><input id="paid" type="number" step="0.01" min="0"></div>
+    <div><label>ملاحظة</label><input id="note" maxlength="300"></div>
+  </div>
+  <div class="sumrow big"><span>إجمالي الفاتورة</span><span id="total" class="num">0.00</span></div>
+  <p class="muted">سيتم تحديث متوسط تكلفة كل منتج تلقائيًا وزيادة المخزون.</p>
+  <button id="save" class="btn">حفظ فاتورة الشراء</button>
+</div>
+<div id="toast" class="toast"></div>
+<script>
+const CSRF = "{{ csrf_token() }}";
+const $ = s => document.querySelector(s);
+const cart = new Map();
+let paidTouched = false;
+const r2 = n => Math.round(n * 100) / 100;
+const fmt = n => r2(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+function toast(m) { const t = $('#toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2800); }
+async function search(v) { const r = await fetch('/api/products?q=' + encodeURIComponent(v)); return r.ok ? r.json() : []; }
+function add(p) {
+  const it = cart.get(p.id) || {id: p.id, name: p.name, stock: p.stock, qty: 0, cost: p.cost || 0};
+  it.qty++; cart.set(p.id, it); paidTouched = false; render();
+}
+function td(tr, text, cls) { const c = document.createElement('td'); c.textContent = text; if (cls) c.className = cls; tr.appendChild(c); }
+function numInput(val, min, step, on, w) {
+  const c = document.createElement('td'), i = document.createElement('input');
+  i.type = 'number'; i.min = min; i.step = step; i.value = val; i.style.width = w; i.onchange = () => on(parseFloat(i.value) || 0);
+  c.appendChild(i); return c;
+}
+function render() {
+  const body = $('#cart'); body.replaceChildren(); let total = 0;
+  cart.forEach(it => {
+    total += it.qty * it.cost;
+    const tr = document.createElement('tr');
+    td(tr, it.name); td(tr, it.stock, 'num');
+    tr.appendChild(numInput(it.qty, 1, 1, v => { it.qty = Math.max(1, Math.floor(v)); paidTouched = false; render(); }, '80px'));
+    tr.appendChild(numInput(it.cost, 0, 0.01, v => { it.cost = Math.max(0, v); paidTouched = false; render(); }, '100px'));
+    td(tr, fmt(it.qty * it.cost), 'num');
+    const x = document.createElement('td'), b = document.createElement('button');
+    b.className = 'btn red sm'; b.textContent = '×'; b.onclick = () => { cart.delete(it.id); render(); };
+    x.appendChild(b); tr.appendChild(x); body.appendChild(tr);
+  });
+  $('#empty').style.display = cart.size ? 'none' : 'block';
+  $('#total').textContent = fmt(total);
+  if (!paidTouched) $('#paid').value = r2(total);
+}
+$('#paid').oninput = () => { paidTouched = true; };
+function showResults(list) {
+  const box = $('#results'); box.replaceChildren();
+  if (!list.length) { box.style.display = 'none'; return; }
+  list.forEach(p => {
+    const d = document.createElement('div'), a = document.createElement('span'), b = document.createElement('span');
+    a.textContent = p.name; b.className = 'muted'; b.textContent = 'تكلفة ' + fmt(p.cost) + ' | مخزون ' + p.stock;
+    d.append(a, b); d.onclick = () => { add(p); box.style.display = 'none'; $('#scan').value = ''; $('#scan').focus(); };
+    box.appendChild(d);
+  });
+  box.style.display = 'block';
+}
+$('#scan').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return; e.preventDefault();
+  const v = e.target.value.trim(); if (!v) return;
+  const list = await search(v);
+  if (list.length === 1 || (list.length && list[0].barcode === v)) { add(list[0]); e.target.value = ''; $('#results').style.display = 'none'; }
+  else if (!list.length) { toast('لم يتم العثور على المنتج — أضفه من صفحة المنتجات أولًا'); e.target.select(); }
+  else showResults(list);
+});
+let timer;
+$('#scan').addEventListener('input', e => {
+  clearTimeout(timer); const v = e.target.value.trim();
+  if (v.length < 2) { $('#results').style.display = 'none'; return; }
+  timer = setTimeout(async () => { if ($('#scan').value.trim() === v) showResults(await search(v)); }, 250);
+});
+$('#save').onclick = async () => {
+  if (!cart.size) { toast('أضف صنفًا واحدًا على الأقل'); return; }
+  const btn = $('#save'); btn.disabled = true;
+  try {
+    const res = await fetch('/api/purchase', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF': CSRF},
+      body: JSON.stringify({items: [...cart.values()].map(i => ({id: i.id, qty: i.qty, cost: i.cost})),
+        supplier_id: $('#sup').value, paid: $('#paid').value, note: $('#note').value})});
+    const d = await res.json();
+    if (d.ok) location.href = '/purchases/' + d.id; else toast(d.error || 'تعذر الحفظ');
+  } catch (e) { toast('خطأ في الاتصال بالخادم'); }
+  btn.disabled = false;
+};
+render();
+</script>
+{% endblock %}

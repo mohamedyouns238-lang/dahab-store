@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}إعدادات المتجر{% endblock %}
+{% block content %}
+<h2>إعدادات المتجر</h2>
+<form method="post" class="card">
+  {{ csrf() }}<input type="hidden" name="action" value="save">
+  <h3>بيانات المحل على الفاتورة وصفحة العروض</h3>
+  <div class="f">
+    <div><label>رقم تليفون / واتساب المحل</label><input name="phone" value="{{ st.phone }}" dir="ltr" placeholder="01XXXXXXXXX"></div>
+  </div>
+  <p class="muted">يظهر الرقم على الفاتورة وفي صفحة العروض (زر اتصال وواتساب).</p>
+  {% if is_admin %}
+  <h3 style="margin-top:18px">الربط مع GitHub (صفحة العروض + توزيع التحديثات)</h3>
+  <div class="f">
+    <div><label>مستودع GitHub (اسم-المستخدم/اسم-المستودع)</label><input name="repo" value="{{ st.repo }}" dir="ltr" placeholder="mohamed/dahab-store"></div>
+    <div><label>توكن الوصول {% if has_token %}<span class="tag ok">محفوظ ✔</span>{% endif %}</label><input name="token" type="password" dir="ltr" autocomplete="off" placeholder="{{ 'اتركه فارغًا للإبقاء على المحفوظ' if has_token else 'github_pat_...' }}"></div>
+    <div><label>رابط صفحة العروض (يُملأ تلقائيًا)</label><input name="site_url" value="{{ st.site_url }}" dir="ltr" placeholder="{{ site or 'https://اسمك.github.io/اسم-المستودع/' }}"></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label style="margin:0;color:inherit"><input type="checkbox" name="auto_update" value="1" {{ 'checked' if st.auto_update }}> تحديث هذا الجهاز تلقائيًا من GitHub</label>
+    {% if has_token %}<label style="margin:0;color:inherit"><input type="checkbox" name="clear_token" value="1"> مسح التوكن المحفوظ</label>{% endif %}
+  </div>
+  {% endif %}
+  <div class="row" style="margin-top:14px"><button class="btn">حفظ</button></div>
+</form>
+
+<div class="card">
+  <h3>صفحة العروض للعملاء</h3>
+  <p>الرابط الذي يظهر في QR على الفاتورة: <b dir="ltr">{{ site or 'غير محدد بعد' }}</b></p>
+  <p class="muted">
+    {% if status.get('site_ok') %}آخر نشر: {{ status.get('site_time') }} — {{ status.get('site_msg') }}
+    {% elif status.get('site_msg') %}آخر محاولة: {{ status.get('site_msg') }}
+    {% else %}لم يتم النشر بعد.{% endif %}
+    {% if status.get('site_dirty') %}<br><b>توجد تغييرات في انتظار النشر — تُنشر تلقائيًا عند توفر الإنترنت.</b>{% endif %}
+  </p>
+  <div class="row">
+    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="publish"><button class="btn">نشر الصفحة الآن</button></form>
+    {% if is_admin %}<form method="post">{{ csrf() }}<input type="hidden" name="action" value="test"><button class="btn sec">اختبار الاتصال بـ GitHub</button></form>{% endif %}
+    {% if site %}<a class="btn sec" href="{{ site }}" target="_blank" rel="noopener">فتح الصفحة</a>{% endif %}
+  </div>
+  <p class="muted" style="margin-top:10px">أي عرض تضيفه أو تعدّله أو تؤرشفه من صفحة «العروض» يُنشر تلقائيًا. العروض المنتهية تختفي من الصفحة بنفسها.</p>
+</div>
+
+{% if is_admin %}
+<div class="card">
+  <h3>طريقة إعداد GitHub (مرة واحدة)</h3>
+  <ol>
+    <li>أنشئ مستودعًا <b>عامًّا (Public)</b> على github.com — هو نفسه الذي يبني البرنامج.</li>
+    <li>من GitHub: Settings ▸ Developer settings ▸ Personal access tokens ▸ Fine-grained tokens ▸ Generate: اختر هذا المستودع فقط، وصلاحيات <b>Contents: Read and write</b> و <b>Pages: Read and write</b>.</li>
+    <li>الصق اسم المستودع والتوكن هنا واضغط حفظ ثم «نشر الصفحة الآن».</li>
+    <li>الأجهزة الأخرى لا تحتاج توكن — فقط تقرأ التحديثات من المستودع.</li>
+  </ol>
+  <p class="muted">التوكن يُحفظ على هذا الجهاز فقط (ملف config.json). لا تشاركه مع أحد.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager with context %}
+{% block title %}سجل المراجعة{% endblock %}
+{% block content %}
+<h2>سجل المراجعة (Audit Log)</h2>
+<form class="card row" method="get"><div><label>بحث (مستخدم / عملية / تفاصيل)</label><input name="q" value="{{ s }}"></div><button class="btn">بحث</button></form>
+<div class="card tw">
+<table>
+  <tr><th>الوقت</th><th>المستخدم</th><th>العملية</th><th>التفاصيل</th></tr>
+  {% for r in rows %}<tr><td class="num">{{ r.ts }}</td><td>{{ r.username or '-' }}</td><td><span class="tag">{{ r.action }}</span></td><td>{{ r.details }}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">لا توجد سجلات</td></tr>{% endfor %}
+</table>
+</div>
+{{ pager(page, pages) }}
+{% endblock %}

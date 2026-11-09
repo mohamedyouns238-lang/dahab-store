@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+{% block title %}الكاشير{% endblock %}
+{% block content %}
+<h2>الكاشير <span class="muted" style="font-size:13px">F2 = البحث/الباركود &nbsp; F9 = إتمام البيع</span></h2>
+<div class="pos">
+  <section>
+    <div class="row" style="flex-wrap:nowrap;align-items:stretch">
+      <input id="scan" placeholder="امسح الباركود / QR أو اكتب اسم المنتج ثم Enter" autocomplete="off" autofocus style="flex:1">
+      <button type="button" class="btn sec" id="cam" title="مسح بكاميرا الجهاز">📷 كاميرا</button>
+    </div>
+    <div id="results" style="display:none"></div>
+    <div id="okbar" class="flash ok" style="display:none;margin-top:10px"></div>
+    <div class="card tw" style="margin-top:12px">
+      <table>
+        <thead><tr><th>المنتج</th><th>السعر</th><th>الكمية</th><th>الإجمالي</th><th></th></tr></thead>
+        <tbody id="cart"></tbody>
+      </table>
+      <p id="empty" class="muted" style="text-align:center">السلة فارغة — امسح أول منتج</p>
+    </div>
+    {% if offers %}
+    <div class="card"><h3>🏷️ العروض الحالية</h3>
+      <div class="offstrip">
+        {% for o in offers %}<div class="offmini">{% if o.image %}<img src="{{ img_url(o.image) }}" alt="">{% endif %}
+          <div><b>{{ o.title }}</b>{% if o.pname %}<br><span class="muted">{{ o.pname }}</span>{% endif %}
+          {% if o.percent %}<br><span class="tag ok">خصم {{ '%g'|format(o.percent) }}%{{ ' — يُطبَّق تلقائيًا' if o.product_id }}</span>{% endif %}</div></div>{% endfor %}
+      </div>
+      <p style="margin:8px 0 0"><a href="{{ url_for('offers') }}">عرض كل العروض</a></p>
+    </div>
+    {% endif %}
+  </section>
+  <aside>
+    <div class="card">
+      <h3>بيانات العميل {% if require_customer %}<span class="tag bad">إجباري</span>{% endif %}</h3>
+      <label>رقم الهاتف</label>
+      <input id="cphone" type="tel" inputmode="tel" dir="ltr" autocomplete="off" placeholder="01xxxxxxxxx" style="width:100%">
+      <label style="margin-top:8px">اسم العميل</label>
+      <input id="cname" autocomplete="off" maxlength="80" style="width:100%">
+      <div id="cbadge" class="cbadge" style="display:none"></div>
+    </div>
+    <div class="card">
+      <div class="sumrow"><span>الإجمالي (بعد العروض)</span><b id="sub" class="num">0.00</b></div>
+      <div class="sumrow" id="crow" style="display:none"><span id="clabel">خصم العميل</span><b id="cdisc" class="num low">0.00</b></div>
+      {% if can_discount %}<div class="sumrow"><span>خصم يدوي ({{ CURRENCY }})</span><input id="disc" type="number" min="0" step="0.01" value="0" style="width:110px"></div>{% endif %}
+      <div class="sumrow big"><span>الصافي</span><span id="total" class="num">0.00</span></div>
+      <label style="margin-top:10px">طريقة الدفع</label>
+      <select id="method" style="width:100%">{% for k, v in METHODS.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+      <label style="margin-top:10px">المبلغ المدفوع</label>
+      <input id="paid" type="number" min="0" step="0.01" style="width:100%">
+      <div class="sumrow"><span>الباقي للعميل</span><b id="change" class="num">0.00</b></div>
+      <div class="sumrow"><span>متبقٍ على العميل</span><b id="due" class="num">0.00</b></div>
+      <button id="pay" class="btn lg" style="margin-top:12px">إتمام البيع (F9)</button>
+      <button id="clear" class="btn sec" style="width:100%;margin-top:8px">تفريغ السلة</button>
+    </div>
+
+    <div class="card">
+      <h3>الأجهزة</h3>
+      <p class="muted" style="margin:0 0 8px;font-size:13px">قارئ الباركود / QR (USB أو بلوتوث) يعمل تلقائيًا كلوحة مفاتيح — يكفي توصيله ومسح المنتج.</p>
+      <label>طريقة الطباعة</label>
+      <select id="pmode" style="width:100%">
+        <option value="browser">طباعة المتصفح (أي طابعة مثبتة)</option>
+        <option value="device">مباشرة للطابعة الحرارية (ESC/POS)</option>
+      </select>
+      <label style="margin-top:8px">عرض الورق</label>
+      <select id="paper" style="width:100%"><option value="80">80 مم</option><option value="58">58 مم</option></select>
+      <label style="margin-top:8px"><input type="checkbox" id="autoprint" checked> طباعة الفاتورة تلقائيًا بعد البيع</label>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="btn sec sm" id="usb">ربط طابعة USB</button>
+        <button type="button" class="btn sec sm" id="ser">ربط طابعة Serial / بلوتوث</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="btn sec sm" id="testp">طباعة تجريبية</button>
+        <button type="button" class="btn sec sm" id="reprint">إعادة طباعة آخر فاتورة</button>
+      </div>
+      <p id="pstat" class="muted" style="margin:8px 0 0;font-size:13px">الطابعة: غير مربوطة</p>
+    </div>
+  </aside>
+</div>
+
+<div id="camwrap" class="camwrap" style="display:none">
+  <div class="card"><video id="vid" playsinline muted style="width:100%;border-radius:8px;background:#000"></video>
+    <p class="muted" id="camstat" style="text-align:center;margin:8px 0">وجّه الكاميرا نحو الباركود أو QR</p>
+    <button type="button" class="btn red" id="camx" style="width:100%">إغلاق</button></div>
+</div>
+
+<div id="receipt"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+const CSRF = {{ csrf_token()|tojson }};
+const REQUIRE = {{ require_customer|tojson }};
+const CAN_DISC = {{ can_discount|tojson }};
+const $ = s => document.querySelector(s);
+const cart = new Map();          // id -> {id,name,price,orig,pct,image,stock,qty}
+let paidTouched = false, lastReceipt = null, device = null, custPct = 0, custKnown = false, nameAuto = false;
+const r2 = n => Math.round(n * 100) / 100;
+const fmt = n => r2(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const store = {get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } },
+               set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }};
+function toast(m) { const t = $('#toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 3600); }
+function cell(tr, text, cls) { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; tr.appendChild(td); return td; }
+function thumb(src) { const i = document.createElement('img'); i.className = 'thumb'; i.alt = ''; i.src = src; return i; }
+
+/* ---------------------------------------------------------------- customer */
+let ctimer;
+function badge(html, cls) { const b = $('#cbadge'); b.className = 'cbadge ' + (cls || ''); b.textContent = html; b.style.display = html ? 'block' : 'none'; }
+async function lookupCustomer() {
+  const phone = $('#cphone').value.trim();
+  if (phone.replace(/\D/g, '').length < 8) { custPct = 0; custKnown = false; badge(''); render(); return; }
+  try {
+    const r = await fetch('/api/customer?phone=' + encodeURIComponent(phone)); const d = await r.json();
+    if ($('#cphone').value.trim() !== phone) return;
+    if (d.found) {
+      custKnown = true; custPct = d.discount || 0;
+      if (!$('#cname').value.trim() || nameAuto) { $('#cname').value = d.name; nameAuto = true; }
+      badge('✔ عميل مسجّل: ' + d.name + (custPct ? ' — خصم ' + custPct + '% يُطبَّق تلقائيًا' : ' — لا يوجد خصم'), 'ok');
+    } else { custKnown = false; custPct = 0; badge('عميل جديد — سيُضاف إلى قائمة العملاء بعد البيع', 'new'); }
+    render();
+  } catch (e) {}
+}
+$('#cphone').addEventListener('input', () => { clearTimeout(ctimer); ctimer = setTimeout(lookupCustomer, 300); });
+$('#cname').addEventListener('input', () => { nameAuto = false; });
+function resetCustomer() { $('#cphone').value = ''; $('#cname').value = ''; custPct = 0; custKnown = false; nameAuto = false; badge(''); }
+
+/* ---------------------------------------------------------------- products / cart */
+async function search(v) { const r = await fetch('/api/products?q=' + encodeURIComponent(v)); return r.ok ? r.json() : []; }
+
+function add(p) {
+  const it = cart.get(p.id) || {id: p.id, name: p.name, price: p.price, orig: p.orig_price, pct: p.offer_pct, image: p.image, stock: p.stock, qty: 0};
+  if (it.qty + 1 > p.stock) { toast('المخزون غير كافٍ: المتاح ' + p.stock); return; }
+  it.qty++; it.stock = p.stock; it.price = p.price; it.orig = p.orig_price; it.pct = p.offer_pct; cart.set(p.id, it); paidTouched = false; render();
+}
+
+function manual() { return CAN_DISC ? Math.max(parseFloat($('#disc').value) || 0, 0) : 0; }
+
+function render() {
+  const body = $('#cart'); body.replaceChildren();
+  let sub = 0;
+  cart.forEach(it => {
+    sub += it.price * it.qty;
+    const tr = document.createElement('tr');
+    const nm = document.createElement('td'); nm.className = 'nm';
+    if (it.image) nm.appendChild(thumb(it.image));
+    const sp = document.createElement('span'); sp.textContent = it.name; nm.appendChild(sp);
+    if (it.pct) { const t = document.createElement('span'); t.className = 'tag ok'; t.textContent = 'عرض ' + it.pct + '%'; nm.appendChild(t); }
+    tr.appendChild(nm);
+    const pr = cell(tr, fmt(it.price), 'num');
+    if (it.pct) { const o = document.createElement('s'); o.className = 'muted'; o.textContent = ' ' + fmt(it.orig); pr.appendChild(o); }
+    const td = document.createElement('td'), q = document.createElement('input');
+    q.type = 'number'; q.min = 1; q.max = it.stock; q.value = it.qty; q.className = 'cartqty';
+    q.onchange = () => { let v = parseInt(q.value) || 1; if (v > it.stock) { v = it.stock; toast('المتاح ' + it.stock); } it.qty = Math.max(1, v); paidTouched = false; render(); };
+    td.appendChild(q); tr.appendChild(td);
+    cell(tr, fmt(it.price * it.qty), 'num');
+    const x = document.createElement('td'), b = document.createElement('button');
+    b.className = 'btn red sm'; b.textContent = '×'; b.onclick = () => { cart.delete(it.id); render(); };
+    x.appendChild(b); tr.appendChild(x); body.appendChild(tr);
+  });
+  $('#empty').style.display = cart.size ? 'none' : 'block';
+  const cd = r2(sub * custPct / 100);
+  const disc = Math.min(r2(cd + manual()), sub);
+  const total = r2(sub - disc);
+  $('#sub').textContent = fmt(sub); $('#total').textContent = fmt(total);
+  $('#crow').style.display = cd > 0 ? 'flex' : 'none';
+  $('#clabel').textContent = 'خصم العميل ' + custPct + '%'; $('#cdisc').textContent = '- ' + fmt(cd);
+  if (!paidTouched) $('#paid').value = $('#method').value === 'credit' ? 0 : total;
+  const paid = parseFloat($('#paid').value) || 0;
+  $('#change').textContent = fmt(Math.max(paid - total, 0));
+  $('#due').textContent = fmt(Math.max(total - paid, 0));
+}
+
+function showResults(list) {
+  const box = $('#results'); box.replaceChildren();
+  if (!list.length) { box.style.display = 'none'; return; }
+  list.forEach(p => {
+    const d = document.createElement('div');
+    const a = document.createElement('span'); a.className = 'nm';
+    if (p.image) a.appendChild(thumb(p.image));
+    const t = document.createElement('span'); t.textContent = p.name + (p.brand ? ' — ' + p.brand : ''); a.appendChild(t);
+    const b = document.createElement('span'); b.className = 'muted';
+    b.textContent = fmt(p.price) + (p.offer_pct ? ' (عرض ' + p.offer_pct + '%)' : '') + ' | مخزون ' + p.stock;
+    d.append(a, b);
+    d.onclick = () => { add(p); box.style.display = 'none'; $('#scan').value = ''; $('#scan').focus(); };
+    box.appendChild(d);
+  });
+  box.style.display = 'block';
+}
+
+async function handleCode(v) {
+  v = (v || '').trim(); if (!v) return;
+  const list = await search(v);
+  const inp = $('#scan');
+  if (list.length === 1 || (list.length && list[0].barcode === v)) { add(list[0]); inp.value = ''; $('#results').style.display = 'none'; }
+  else if (!list.length) { toast('لم يتم العثور على المنتج: ' + v); inp.select(); }
+  else showResults(list);
+}
+
+$('#scan').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== 'Tab') return;
+  const v = e.target.value.trim(); if (!v) return;
+  e.preventDefault(); handleCode(v);
+});
+let timer;
+$('#scan').addEventListener('input', e => {
+  clearTimeout(timer); const v = e.target.value.trim();
+  if (v.length < 2) { $('#results').style.display = 'none'; return; }
+  timer = setTimeout(async () => { if ($('#scan').value.trim() === v) showResults(await search(v)); }, 250);
+});
+document.addEventListener('keydown', e => {
+  const t = document.activeElement, tag = t ? t.tagName : '';
+  if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || $('#camwrap').style.display !== 'none') return;
+  $('#scan').focus();
+});
+if (CAN_DISC) $('#disc').oninput = () => { paidTouched = false; render(); };
+$('#method').onchange = () => { paidTouched = false; render(); };
+$('#paid').oninput = () => { paidTouched = true; render(); };
+$('#clear').onclick = () => { cart.clear(); if (CAN_DISC) $('#disc').value = 0; resetCustomer(); paidTouched = false; render(); $('#scan').focus(); };
+
+/* ---------------------------------------------------------------- camera (QR / barcode) */
+let camStream = null, camTimer = null;
+async function camStop() { clearInterval(camTimer); if (camStream) camStream.getTracks().forEach(t => t.stop()); camStream = null; $('#camwrap').style.display = 'none'; $('#scan').focus(); }
+$('#camx').onclick = camStop;
+$('#cam').onclick = async () => {
+  if (!('BarcodeDetector' in window)) { toast('المتصفح لا يدعم مسح الكاميرا — استخدم Chrome أو قارئ باركود/QR USB'); return; }
+  if (!navigator.mediaDevices || !window.isSecureContext) { toast('الكاميرا تحتاج اتصال HTTPS (أو localhost)'); return; }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
+    const v = $('#vid'); v.srcObject = camStream; await v.play();
+    $('#camwrap').style.display = 'flex';
+    const det = new BarcodeDetector();
+    let busy = false;
+    camTimer = setInterval(async () => {
+      if (busy) return; busy = true;
+      try { const f = await det.detect(v); if (f.length) { const code = f[0].rawValue; await camStop(); await handleCode(code); } } catch (e) {}
+      busy = false;
+    }, 250);
+  } catch (e) { toast('تعذر تشغيل الكاميرا: ' + (e.message || e)); camStop(); }
+};
+
+/* ---------------------------------------------------------------- receipt: browser print */
+function paperPx() { return store.get('paper', '80') === '58' ? 384 : 576; }
+function fillReceiptDom(r) {
+  const box = $('#receipt'); box.replaceChildren();
+  const add = (txt, cls) => { const d = document.createElement('div'); d.textContent = txt; if (cls) d.className = cls; box.appendChild(d); return d; };
+  const pair = (a, b, cls) => { const d = document.createElement('div'); d.className = 'rr ' + (cls || ''); const x = document.createElement('span'), y = document.createElement('span'); x.textContent = a; y.textContent = b; d.append(x, y); box.appendChild(d); };
+  add(r.store, 'rt'); add('فاتورة ' + r.invoice, 'rc'); add(r.date, 'rc'); add('الكاشير: ' + r.cashier, 'rc');
+  if (r.customer) add('العميل: ' + r.customer + (r.customer_phone ? ' — ' + r.customer_phone : ''), 'rc');
+  add('', 'hr');
+  r.items.forEach(i => { add(i.name, 'rn'); pair(i.qty + ' × ' + fmt(i.price), fmt(i.qty * i.price)); });
+  add('', 'hr');
+  pair('الإجمالي', fmt(r.subtotal));
+  if (r.discount > 0) pair(r.discount_note || 'الخصم', '- ' + fmt(r.discount));
+  pair('الصافي (' + r.currency + ')', fmt(r.total), 'rb');
+  pair('طريقة الدفع', r.method); pair('المدفوع', fmt(r.paid));
+  if (r.change > 0) pair('الباقي', fmt(r.change));
+  if (r.due > 0) pair('المتبقي على العميل', fmt(r.due), 'rb');
+  add('', 'hr'); add('شكرًا لزيارتكم', 'rc');
+  const sh = r.shop || {};
+  if (sh.phone) add('للتواصل والواتساب: ' + sh.phone, 'rc');
+  if (sh.qr && sh.qr.length) { add('امسح الكود لمشاهدة عروضنا', 'rc'); box.appendChild(qrCanvas(sh.qr)); }
+}
+function qrCanvas(rows) {            // QR مرسوم مباشرة (متزامن) ليظهر فورًا في الطباعة
+  const n = rows.length, q = 4, sc = 6, c = document.createElement('canvas'); c.width = c.height = (n + 2 * q) * sc; c.className = 'qr';
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.fillStyle = '#000';
+  rows.forEach((row, r) => { for (let k = 0; k < n; k++) if (row[k] === '1') x.fillRect((k + q) * sc, (r + q) * sc, sc, sc); });
+  return c;
+}
+function browserPrint(r) {
+  const mm = store.get('paper', '80') === '58' ? '48mm' : '72mm';
+  let st = $('#pagestyle'); if (!st) { st = document.createElement('style'); st.id = 'pagestyle'; document.head.appendChild(st); }
+  st.textContent = '@page{size:' + (store.get('paper', '80') === '58' ? '58mm' : '80mm') + ' auto;margin:0} #receipt{--pw:' + mm + '}';
+  fillReceiptDom(r); window.print();
+}
+
+/* ---------------------------------------------------------------- receipt: direct ESC/POS (USB / Serial) */
+function buildCanvas(r) {
+  const W = paperPx(), M = 10, fs = W === 384 ? 20 : 24;
+  const font = (sz, b) => (b ? 'bold ' : '') + sz + 'px Tahoma, "Noto Naskh Arabic", Arial, sans-serif';
+  const m = document.createElement('canvas').getContext('2d');
+  const ops = []; let y = 8;
+  const wrap = (t, size, bold) => { m.font = font(size, bold); const out = []; let cur = '';
+    t.split(' ').forEach(w => { const test = cur ? cur + ' ' + w : w; if (m.measureText(test).width > W - 2 * M && cur) { out.push(cur); cur = w; } else cur = test; });
+    if (cur) out.push(cur); return out; };
+  const text = (t, o = {}) => { const size = o.size || fs, bold = !!o.bold, align = o.align || 'right';
+    wrap(t, size, bold).forEach(line => { ops.push({k: 't', t: line, size, bold, align, y: y + size}); y += size + 8; }); };
+  const row = (left, right, o = {}) => { const size = o.size || fs; ops.push({k: 'r', left, right, size, bold: !!o.bold, y: y + size}); y += size + 8; };
+  const rule = () => { ops.push({k: 'l', y: y + 4}); y += 14; };
+
+  text(r.store, {size: fs + 14, bold: true, align: 'center'});
+  text('فاتورة ' + r.invoice, {align: 'center'}); text(r.date, {align: 'center'}); text('الكاشير: ' + r.cashier, {align: 'center'});
+  if (r.customer) text('العميل: ' + r.customer + (r.customer_phone ? ' — ' + r.customer_phone : ''), {align: 'center'});
+  rule();
+  r.items.forEach(i => { text(i.name, {bold: true}); row(fmt(i.qty * i.price), i.qty + ' × ' + fmt(i.price)); });
+  rule();
+  row(fmt(r.subtotal), 'الإجمالي');
+  if (r.discount > 0) row('- ' + fmt(r.discount), r.discount_note || 'الخصم');
+  row(fmt(r.total), 'الصافي (' + r.currency + ')', {size: fs + 6, bold: true});
+  row(r.method, 'طريقة الدفع'); row(fmt(r.paid), 'المدفوع');
+  if (r.change > 0) row(fmt(r.change), 'الباقي');
+  if (r.due > 0) row(fmt(r.due), 'المتبقي على العميل', {bold: true});
+  rule(); text('شكرًا لزيارتكم', {align: 'center'});
+  const sh = r.shop || {};
+  if (sh.phone) text('للتواصل والواتساب: ' + sh.phone, {align: 'center'});
+  if (sh.qr && sh.qr.length) {
+    text('امسح الكود لمشاهدة عروضنا', {align: 'center'});
+    const n = sh.qr.length, sc = Math.max(2, Math.floor(Math.min(W * 0.62, 280) / (n + 8))), size = (n + 8) * sc;
+    ops.push({k: 'q', rows: sh.qr, sc, size, y}); y += size + 8;
+  }
+  y += 16;
+
+  const c = document.createElement('canvas'); c.width = W; c.height = y;
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, W, y); x.fillStyle = '#000'; x.textBaseline = 'alphabetic';
+  ops.forEach(o => {
+    if (o.k === 'l') { x.fillRect(M, o.y, W - 2 * M, 2); return; }
+    if (o.k === 'q') { const x0 = Math.floor((W - o.size) / 2) + 4 * o.sc, y0 = o.y + 4 * o.sc;
+      o.rows.forEach((row, r) => { for (let k = 0; k < row.length; k++) if (row[k] === '1') x.fillRect(x0 + k * o.sc, y0 + r * o.sc, o.sc, o.sc); }); return; }
+    x.font = font(o.size, o.bold);
+    if (o.k === 't') { x.direction = 'rtl'; x.textAlign = o.align === 'center' ? 'center' : 'right'; x.fillText(o.t, o.align === 'center' ? W / 2 : W - M, o.y); }
+    else { x.direction = 'rtl'; x.textAlign = 'right'; x.fillText(o.right, W - M, o.y); x.direction = 'ltr'; x.textAlign = 'left'; x.fillText(o.left, M, o.y); }
+  });
+  return c;
+}
+function toEscPos(c) {
+  const w = c.width, h = c.height, wb = w / 8, d = c.getContext('2d').getImageData(0, 0, w, h).data, out = [0x1B, 0x40];
+  for (let y0 = 0; y0 < h; y0 += 200) {
+    const bh = Math.min(200, h - y0);
+    out.push(0x1D, 0x76, 0x30, 0, wb & 255, wb >> 8, bh & 255, bh >> 8);
+    for (let y = y0; y < y0 + bh; y++) for (let xb = 0; xb < wb; xb++) {
+      let b = 0;
+      for (let k = 0; k < 8; k++) { const i = (y * w + xb * 8 + k) * 4; if (d[i + 3] > 127 && d[i] * .3 + d[i + 1] * .59 + d[i + 2] * .11 < 150) b |= 0x80 >> k; }
+      out.push(b);
+    }
+  }
+  out.push(0x1B, 0x64, 4, 0x1D, 0x56, 66, 0);        // feed + partial cut
+  return new Uint8Array(out);
+}
+async function sendRaw(bytes) {
+  if (!device) throw new Error('الطابعة غير مربوطة');
+  if (device.type === 'usb') { for (let i = 0; i < bytes.length; i += 1024) await device.dev.transferOut(device.ep, bytes.slice(i, i + 1024)); }
+  else { const w = device.port.writable.getWriter(); try { for (let i = 0; i < bytes.length; i += 1024) await w.write(bytes.slice(i, i + 1024)); } finally { w.releaseLock(); } }
+}
+function pstat(t) { $('#pstat').textContent = 'الطابعة: ' + t; }
+
+async function openUsb(dev) {
+  await dev.open(); if (dev.configuration === null) await dev.selectConfiguration(1);
+  let pick = null;
+  for (const itf of dev.configuration.interfaces) for (const al of itf.alternates) {
+    const ep = al.endpoints.find(e => e.direction === 'out' && e.type === 'bulk');
+    if (ep && (!pick || al.interfaceClass === 7)) pick = {n: itf.interfaceNumber, ep: ep.endpointNumber};
+  }
+  if (!pick) throw new Error('لم يتم العثور على قناة إرسال في هذا الجهاز');
+  await dev.claimInterface(pick.n);
+  device = {type: 'usb', dev, ep: pick.ep}; store.set('pdev', 'usb:' + dev.vendorId + ':' + dev.productId);
+  pstat('USB متصلة — ' + (dev.productName || 'طابعة'));
+}
+async function openSerial(port, baud) {
+  await port.open({baudRate: baud || 9600});
+  device = {type: 'serial', port}; store.set('pdev', 'serial'); store.set('baud', baud || 9600);
+  pstat('Serial متصلة');
+}
+$('#usb').onclick = async () => {
+  if (!navigator.usb) { toast('المتصفح لا يدعم USB المباشر — استخدم Chrome/Edge (HTTPS أو localhost)'); return; }
+  try { await openUsb(await navigator.usb.requestDevice({filters: []})); $('#pmode').value = 'device'; store.set('pmode', 'device'); toast('تم ربط الطابعة'); }
+  catch (e) { if (e.name !== 'NotFoundError') toast('تعذر الربط: ' + (e.message || e)); }
+};
+$('#ser').onclick = async () => {
+  if (!navigator.serial) { toast('المتصفح لا يدعم Serial — استخدم Chrome/Edge (HTTPS أو localhost)'); return; }
+  const baud = parseInt(prompt('سرعة الاتصال (Baud) — الشائع 9600 أو 115200', store.get('baud', '9600'))) || 9600;
+  try { await openSerial(await navigator.serial.requestPort(), baud); $('#pmode').value = 'device'; store.set('pmode', 'device'); toast('تم ربط الطابعة'); }
+  catch (e) { if (e.name !== 'NotFoundError') toast('تعذر الربط: ' + (e.message || e)); }
+};
+async function restoreDevice() {
+  try {
+    const last = store.get('pdev', '');
+    if (last.startsWith('usb:') && navigator.usb) {
+      const [, v, p] = last.split(':'); const d = (await navigator.usb.getDevices()).find(x => x.vendorId == v && x.productId == p);
+      if (d) await openUsb(d);
+    } else if (last === 'serial' && navigator.serial) {
+      const ps = await navigator.serial.getPorts(); if (ps.length) await openSerial(ps[0], parseInt(store.get('baud', '9600')));
+    }
+  } catch (e) { pstat('غير مربوطة (اضغط ربط الطابعة)'); }
+}
+
+async function printReceipt(r) {
+  lastReceipt = r;
+  if ($('#pmode').value === 'device') {
+    if (!device) { toast('الطابعة غير مربوطة — تمت الطباعة عبر المتصفح'); return browserPrint(r); }
+    try { await sendRaw(toEscPos(buildCanvas(r))); return; }
+    catch (e) { device = null; pstat('انقطع الاتصال — اضغط ربط الطابعة'); toast('فشلت الطباعة المباشرة: ' + (e.message || e)); }
+  }
+  browserPrint(r);
+}
+$('#testp').onclick = () => printReceipt({store: {{ STORE_NAME|tojson }}, currency: {{ CURRENCY|tojson }}, invoice: 'TEST', date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+  cashier: {{ g.user['full_name']|tojson }}, customer: 'عميل تجريبي', customer_phone: '01000000000', method: 'نقدي', items: [{name: 'منتج تجريبي', qty: 2, price: 50}], subtotal: 100, discount: 0, discount_note: '', total: 100, paid: 100, change: 0, due: 0, shop: {{ shop|tojson }}});
+$('#reprint').onclick = () => lastReceipt ? printReceipt(lastReceipt) : toast('لا توجد فاتورة سابقة في هذه الجلسة');
+$('#pmode').value = store.get('pmode', 'browser'); $('#paper').value = store.get('paper', '80'); $('#autoprint').checked = store.get('autoprint', '1') === '1';
+$('#pmode').onchange = e => store.set('pmode', e.target.value);
+$('#paper').onchange = e => store.set('paper', e.target.value);
+$('#autoprint').onchange = e => store.set('autoprint', e.target.checked ? '1' : '0');
+restoreDevice();
+
+/* ---------------------------------------------------------------- checkout */
+async function pay() {
+  if (!cart.size) { toast('السلة فارغة'); return; }
+  const phone = $('#cphone').value.trim(), name = $('#cname').value.trim();
+  if (REQUIRE && (!name || phone.replace(/\D/g, '').length < 7)) { toast('أدخل اسم العميل ورقم هاتفه أولًا'); (name ? $('#cphone') : $('#cname')).focus(); return; }
+  const btn = $('#pay'); btn.disabled = true;
+  try {
+    const res = await fetch('/api/sale', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF': CSRF},
+      body: JSON.stringify({items: [...cart.values()].map(i => ({id: i.id, qty: i.qty})), discount: CAN_DISC ? $('#disc').value : 0,
+        method: $('#method').value, customer_name: name, customer_phone: phone, paid: $('#paid').value})});
+    const d = await res.json();
+    if (d.ok) {
+      cart.clear(); if (CAN_DISC) $('#disc').value = 0; resetCustomer(); paidTouched = false; render();
+      const ok = $('#okbar'); ok.textContent = 'تم البيع ✔ ' + d.invoice + ' — الصافي ' + fmt(d.receipt.total); ok.style.display = 'block';
+      lastReceipt = d.receipt;
+      if ($('#autoprint').checked) await printReceipt(d.receipt);
+      $('#cphone').focus();
+    } else toast(d.error || 'تعذر إتمام البيع');
+  } catch (err) { toast('خطأ في الاتصال بالخادم'); }
+  btn.disabled = false;
+}
+$('#pay').onclick = pay;
+document.addEventListener('keydown', e => {
+  if (e.key === 'F2') { e.preventDefault(); $('#scan').focus(); }
+  if (e.key === 'F9') { e.preventDefault(); pay(); }
+});
+render();
+</script>
+{% endblock %}

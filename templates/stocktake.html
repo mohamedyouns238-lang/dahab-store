@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, csrf with context %}
+{% block title %}الجرد{% endblock %}
+{% block content %}
+<h2>جرد المخزون</h2>
+<p class="muted">اكتب الكمية الفعلية الموجودة في المحل لكل صنف. الأصناف التي تتركها فارغة لا تتغير. كل فرق يُسجَّل في «حركة المخزون» ولا يُحذف.</p>
+<form class="card row" method="get"><div><label>بحث بالاسم أو الباركود</label><input name="q" value="{{ s }}" autofocus></div><button class="btn">بحث</button></form>
+<form method="post">
+  {{ csrf() }}<input type="hidden" name="q" value="{{ s }}"><input type="hidden" name="page" value="{{ page }}">
+  <div class="card tw"><table>
+    <tr><th>الباركود</th><th>المنتج</th><th>الفئة</th><th>رصيد النظام</th><th>الكمية الفعلية</th></tr>
+    {% for p in rows %}<tr><td class="num">{{ p.barcode or '-' }}</td><td>{{ p.name }}</td><td>{{ p.cat or '-' }}</td><td class="num">{{ p.stock }}</td>
+      <td><input type="number" min="0" name="c_{{ p.id }}" style="width:110px"></td></tr>
+    {% else %}<tr><td colspan="5" class="muted">لا توجد منتجات</td></tr>{% endfor %}
+  </table></div>
+  <div class="card row"><div><label>ملاحظة (اختياري)</label><input name="note" maxlength="200" style="width:320px"></div>
+    <button class="btn" onclick="return confirm('اعتماد أرقام الجرد لهذه الصفحة؟')">اعتماد الجرد</button></div>
+</form>
+{{ pager(page, pages) }}
+<div class="card tw"><h3>آخر عمليات الجرد</h3>
+  <table><tr><th>الوقت</th><th>المنتج</th><th>الفرق</th><th>قيمة الفرق (تكلفة)</th><th>المرجع</th><th>ملاحظة</th></tr>
+  {% for m in hist %}<tr><td class="num">{{ m.ts|dt }}</td><td>{{ m.pname }}</td>
+    <td class="num {{ 'low' if m.delta < 0 }}">{{ '%+d'|format(m.delta) }}</td><td class="num">{{ (m.delta * m.cost)|money }}</td><td>{{ m.ref }}</td><td>{{ m.note }}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">لم يتم إجراء جرد بعد</td></tr>{% endfor %}</table></div>
+{% endblock %}

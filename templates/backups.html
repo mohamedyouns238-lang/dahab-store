@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}النسخ الاحتياطي{% endblock %}
+{% block content %}
+<h2>النسخ الاحتياطي وسلامة البيانات</h2>
+{% include "_alerts.html" %}
+
+<div class="card" id="updcard">
+  <h3>التحديثات <span class="tag">الإصدار {{ upd.build }} ({{ upd.version }})</span>{% if upd.pending %} <span class="tag warn">إصدار {{ upd.pending }} جاهز للتفعيل</span>{% endif %}</h3>
+  {% if not upd.supported %}
+    <p class="muted">التحديث التلقائي يعمل في نسخة سطح المكتب (برنامج Dahab Store المثبّت على الويندوز) فقط.</p>
+  {% else %}
+    <p>ارفع ملف التحديث الذي أرسلته لك (<span dir="ltr">DahabStore-update-N.zip</span>). يُفحص تلقائيًا ثم يُطبَّق ويعيد النظام تشغيل نفسه خلال ثوانٍ — <b>بدون حذف البرنامج ولا لمس بياناتك</b>. لو فشل التحديث يرجع النظام للإصدار السابق تلقائيًا.</p>
+    <form id="updform" class="row">
+      <input type="file" id="updfile" accept=".zip" required>
+      <label style="margin:0;color:inherit"><input type="checkbox" id="updpub" checked {{ 'disabled' if not cloud_ready }}> ابعته تلقائيًا لباقي الأجهزة عبر GitHub{% if not cloud_ready %} <span class="muted">(يحتاج إعداد GitHub في «إعدادات المتجر»)</span>{% endif %}</label>
+      <button class="btn" id="updbtn">رفع وتحديث</button>
+    </form>
+    <p id="updmsg" class="muted" style="margin:8px 0 0"></p>
+    <p class="muted">باقي الأجهزة تفحص التحديثات تلقائيًا كل نصف ساعة عند وجود إنترنت، وتفعّل التحديث وقت الهدوء (بعد دقيقتين بدون استخدام) أو عند التشغيل التالي.
+      {% if st.get('update_check') %}<br>آخر فحص: {{ st.get('update_check') }} — {{ st.get('update_check_msg') }}{% endif %}
+      {% if st.get('feed_msg') %}<br>آخر رفع لباقي الأجهزة: {{ st.get('feed_msg') }}{% endif %}</p>
+    <div class="row"><button class="btn sec sm" id="updcheck">فحص التحديثات الآن</button>
+      {% if upd.pending %}<button class="btn sm" id="updrestart">تفعيل الآن (إعادة تشغيل)</button>{% endif %}</div>
+    {% if upd.history %}<details style="margin-top:10px"><summary>سجل التحديثات</summary><ul>{% for h in upd.history %}<li class="muted"><span dir="ltr">{{ h.ts }}</span> — {{ h.msg }}</li>{% endfor %}</ul></details>{% endif %}
+  {% endif %}
+</div>
+<script>
+(function () {
+  const csrf = {{ csrf_token()|tojson }}, msg = document.getElementById('updmsg');
+  if (!document.getElementById('updform')) return;
+  function waitBack(target) {
+    msg.textContent = 'جارٍ إعادة تشغيل النظام… لا تغلق النافذة.';
+    let tries = 0, down = false;
+    const t = setInterval(async () => {
+      tries++;
+      try { const r = await fetch('/health', {cache: 'no-store'}); const ok = r.ok; if (ok && (down || tries > 6)) { clearInterval(t); location.href = target; } } catch (e) { down = true; }
+      if (tries > 90) { clearInterval(t); msg.textContent = 'تأخر النظام في العودة — أغلق النافذة وافتح البرنامج من جديد.'; }
+    }, 1500);
+  }
+  document.getElementById('updform').addEventListener('submit', async e => {
+    e.preventDefault();
+    const fl = document.getElementById('updfile').files[0]; if (!fl) return;
+    const fd = new FormData(); fd.append('file', fl); fd.append('csrf', csrf); fd.append('publish', document.getElementById('updpub').checked ? '1' : '0');
+    document.getElementById('updbtn').disabled = true; msg.textContent = 'جارٍ فحص التحديث واختباره (قد يستغرق دقيقة)…';
+    try {
+      const r = await fetch('/updates/upload', {method: 'POST', body: fd}); const d = await r.json();
+      if (!d.ok) { msg.textContent = '✘ ' + d.error; document.getElementById('updbtn').disabled = false; return; }
+      msg.textContent = '✔ تم تجهيز الإصدار ' + d.build + (d.published === false ? ' (تعذر رفعه لباقي الأجهزة الآن: ' + d.publish_msg + ' — سيُعاد المحاولة تلقائيًا)' : '');
+      waitBack('/backups');
+    } catch (err) { msg.textContent = '✘ تعذر الاتصال: ' + err; document.getElementById('updbtn').disabled = false; }
+  });
+  document.getElementById('updcheck').onclick = async () => { msg.textContent = 'جارٍ الفحص…'; const r = await fetch('/updates/check', {method: 'POST', headers: {'X-CSRF': csrf}}); const d = await r.json(); msg.textContent = d.msg; if (/سيُفعَّل/.test(d.msg || '')) setTimeout(() => location.reload(), 1500); };
+  const rb = document.getElementById('updrestart');
+  if (rb) rb.onclick = async () => { await fetch('/updates/restart', {method: 'POST', headers: {'X-CSRF': csrf}}); waitBack('/backups'); };
+})();
+</script>
+<div class="grid g2">
+  <div class="card">
+    <h3>حالة الحماية</h3>
+    <p>النظام يأخذ نسخة احتياطية <b>تلقائيًا</b> عند التشغيل وكل 15 دقيقة عند وجود تغييرات وعند الإغلاق، ويفحص سلامة القاعدة في كل تشغيل، ويسترجع آخر نسخة سليمة لو اكتشف تلفًا.</p>
+    <p class="muted">آخر نسخة: {{ (st.get('last_backup') or 'لا توجد')[:16]|replace('T', ' ') }}<br>مكان البيانات: <span dir="ltr">{{ data_dir }}</span></p>
+    <form method="post" class="row">{{ csrf() }}<button class="btn" name="action" value="backup_now">أخذ نسخة الآن</button>
+      <button class="btn sec" name="action" value="check">فحص سلامة البيانات</button></form>
+  </div>
+  {% if is_admin %}<div class="card">
+    <h3>نسخة إضافية على فلاشة / قرص خارجي</h3>
+    <p class="muted">أمان أكبر: تُنسخ كل نسخة (وصور المنتجات) أيضًا إلى هذا المجلد، مثل <span dir="ltr">E:\DahabBackup</span> أو مجلد OneDrive. اتركه فارغًا لإيقافه.</p>
+    <form method="post" class="row">{{ csrf() }}<input type="hidden" name="action" value="extra_dir">
+      <input name="extra_dir" value="{{ cfg.extra_backup_dir }}" dir="ltr" style="width:260px" placeholder="E:\DahabBackup"><button class="btn">حفظ</button></form>
+    {% if cfg.extra_backup_dir %}<p class="muted">آخر نسخ خارجي: {% if st.get('extra_ok') %}نجح ✔ {{ st.get('extra_msg') }}{% elif st.get('extra_ok') is none %}لم يتم بعد{% else %}فشل ✘ {{ st.get('extra_msg') }}{% endif %}</p>{% endif %}
+  </div>{% endif %}
+</div>
+
+<div class="card tw"><h3>النسخ المحفوظة ({{ items|length }})</h3>
+<table><tr><th>التاريخ</th><th>النوع</th><th>الحجم</th><th></th></tr>
+{% for b in items[:60] %}<tr><td class="num">{{ b.ts.strftime('%Y-%m-%d %H:%M') }}</td>
+  <td><span class="tag">{{ {'auto':'تلقائية','start':'عند التشغيل','exit':'عند الإغلاق','manual':'يدوية','pre_restore':'قبل استرجاع','pre_upgrade':'قبل ترقية'}.get(b.reason, b.reason) }}</span></td>
+  <td class="num">{{ (b.size / 1024)|round|int }} KB</td>
+  <td class="row">{% if is_admin %}<a class="btn sec sm" href="{{ url_for('backup_download', name=b.name) }}">تنزيل</a>
+    <form method="post" action="{{ url_for('backup_restore') }}" class="row" style="flex-wrap:nowrap" onsubmit="return confirm('سيتم استبدال البيانات الحالية بهذه النسخة (مع أخذ نسخة أمان قبلها). متأكد؟')">
+      {{ csrf() }}<input type="hidden" name="name" value="{{ b.name }}"><input name="confirm" placeholder="اكتب: استرجاع" style="width:110px"><button class="btn red sm">استرجاع</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">لا توجد نسخ</td></tr>{% endfor %}</table>
+{% if items|length > 60 %}<p class="muted">يُعرض أحدث 60 نسخة؛ الباقي محفوظ في مجلد backups.</p>{% endif %}</div>
+
+{% if is_admin %}<div class="card"><h3>استرجاع من ملف (مثلًا نسخة من فلاشة)</h3>
+  <form method="post" action="{{ url_for('backup_restore') }}" enctype="multipart/form-data" class="row" onsubmit="return confirm('سيتم استبدال البيانات الحالية بمحتوى الملف. متأكد؟')">
+    {{ csrf() }}<div><label>ملف النسخة (store_....db)</label><input type="file" name="file" accept=".db"></div>
+    <div><label>اكتب: استرجاع</label><input name="confirm"></div><button class="btn red">استرجاع من الملف</button></form></div>{% endif %}
+{% endblock %}

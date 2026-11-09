@@ -1,0 +1,11 @@
+{% macro pager(page, pages) %}
+{% if pages > 1 %}
+<div class="pager noprint">
+  {% if page > 1 %}<a class="btn sec sm" href="{{ url_for(request.endpoint, **dict(request.args.to_dict(), page=page-1)) }}">السابق</a>{% endif %}
+  <span class="muted">صفحة {{ page }} من {{ pages }}</span>
+  {% if page < pages %}<a class="btn sec sm" href="{{ url_for(request.endpoint, **dict(request.args.to_dict(), page=page+1)) }}">التالي</a>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro csrf() %}<input type="hidden" name="csrf" value="{{ csrf_token() }}">{% endmacro %}

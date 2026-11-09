@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}{{ s.invoice_no }}{% endblock %}
+{% block content %}
+<div class="card receipt">
+  <h3>{{ STORE_NAME }}</h3>
+  <p class="c muted">فاتورة بيع {{ s.invoice_no }}{% if s.status != 'active' %} — <b class="low">ملغاة</b>{% endif %}</p>
+  <p>التاريخ: {{ s.created_at|dt }}<br>الكاشير: {{ s.cashier or '-' }}{% if s.customer %}<br>العميل: {{ s.customer }}{{ ' — ' ~ s.cphone if s.cphone }}{% endif %}</p>
+  <table>
+    <tr><th>الصنف</th><th>كمية</th><th>سعر</th><th>إجمالي</th></tr>
+    {% for i in items %}<tr><td>{{ i.name }}</td><td class="num">{{ i.qty }}</td><td class="num">{{ i.price|money }}</td><td class="num">{{ (i.qty * i.price)|money }}</td></tr>{% endfor %}
+  </table>
+  <div class="sumrow"><span>الإجمالي</span><span class="num">{{ s.subtotal|money }}</span></div>
+  {% if s.discount %}<div class="sumrow"><span>{{ s.discount_note or 'الخصم' }}</span><span class="num">- {{ s.discount|money }}</span></div>{% endif %}
+  <div class="sumrow big"><span>الصافي ({{ CURRENCY }})</span><span class="num">{{ s.total|money }}</span></div>
+  <div class="sumrow"><span>طريقة الدفع</span><span>{{ METHODS.get(s.method, s.method) }}</span></div>
+  <div class="sumrow"><span>المدفوع</span><span class="num">{{ s.paid|money }}</span></div>
+  {% if s.paid < s.total - 0.005 %}<div class="sumrow"><span>المتبقي</span><b class="num low">{{ (s.total - s.paid)|money }}</b></div>{% endif %}
+  <p class="c muted">شكرًا لزيارتكم{% if shop.phone %}<br>للتواصل والواتساب: <span dir="ltr">{{ shop.phone }}</span>{% endif %}</p>
+  {% if qr_svg %}<div class="c qrbox">{{ qr_svg|safe }}<div class="muted">امسح الكود لمشاهدة عروضنا</div></div>{% endif %}
+</div>
+<div class="row noprint" style="justify-content:center">
+  <button class="btn" onclick="window.print()">طباعة</button>
+  <a class="btn sec" href="{{ url_for('pos') }}">فاتورة جديدة</a>
+  {% if s.status == 'active' and g.user['role'] in ('admin', 'manager') %}
+  <form method="post" action="{{ url_for('sale_cancel', sid=s.id) }}" onsubmit="return confirm('إلغاء الفاتورة وإرجاع الأصناف للمخزون؟')">{{ csrf() }}<button class="btn red">إلغاء الفاتورة</button></form>{% endif %}
+</div>
+{% if print_now %}<script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));</script>{% endif %}
+{% endblock %}
