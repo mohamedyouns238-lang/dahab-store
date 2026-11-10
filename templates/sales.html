@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager with context %}
+{% block title %}فواتير المبيعات{% endblock %}
+{% block content %}
+<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+  <h2 style="margin:0">فواتير المبيعات {% if g.user['role'] == 'cashier' %}<span class="muted" style="font-size:13px">(فواتيرك اليوم)</span>{% endif %}</h2>
+  {% if g.user['role'] != 'cashier' %}<a class="btn sec" href="{{ url_for('export_sales', **{'from': d1, 'to': d2}) }}">تصدير CSV</a>{% endif %}
+</div>
+{% if g.user['role'] != 'cashier' %}
+<form class="card row" method="get">
+  <div><label>رقم الفاتورة / العميل</label><input name="q" value="{{ s }}"></div>
+  <div><label>من</label><input type="date" name="from" value="{{ d1 }}"></div>
+  <div><label>إلى</label><input type="date" name="to" value="{{ d2 }}"></div>
+  <button class="btn">بحث</button>
+</form>
+{% endif %}
+<div class="card tw">
+<table>
+  <tr><th>الفاتورة</th><th>التاريخ</th><th>العميل</th><th>الكاشير</th><th>الدفع</th><th>الصافي</th><th>المدفوع</th><th>الحالة</th><th></th></tr>
+  {% for s in rows %}
+  <tr>
+    <td>{{ s.invoice_no }}</td><td class="num">{{ s.created_at|dt }}</td><td>{{ s.customer or '-' }}</td><td>{{ s.cashier or '-' }}</td>
+    <td>{{ METHODS.get(s.method, s.method) }}</td><td class="num">{{ s.total|money }}</td>
+    <td class="num {{ 'low' if s.paid < s.total - 0.005 and s.status == 'active' }}">{{ s.paid|money }}</td>
+    <td>{% if s.status == 'active' %}<span class="tag ok">نشطة</span>{% else %}<span class="tag bad">ملغاة</span>{% endif %}</td>
+    <td><a class="btn sec sm" href="{{ url_for('sale_view', sid=s.id) }}">عرض</a></td>
+  </tr>
+  {% else %}<tr><td colspan="9" class="muted">لا توجد فواتير</td></tr>{% endfor %}
+</table>
+</div>
+{{ pager(page, pages) }}
+{% endblock %}

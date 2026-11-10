@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}التقارير{% endblock %}
+{% block content %}
+<div class="row noprint" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+  <h2 style="margin:0">التقارير</h2>
+  <div class="row"><a class="btn sec" href="{{ url_for('export_sales', **{'from': d1, 'to': d2}) }}">تصدير المبيعات CSV</a>
+  <a class="btn sec" href="{{ url_for('export_inventory') }}">تصدير المخزون CSV</a><button class="btn" onclick="window.print()">طباعة</button></div>
+</div>
+<form class="card row noprint" method="get">
+  <div><label>من</label><input type="date" name="from" value="{{ d1 }}"></div>
+  <div><label>إلى</label><input type="date" name="to" value="{{ d2 }}"></div>
+  <button class="btn">عرض</button>
+</form>
+
+<div class="grid g4" style="margin-bottom:16px">
+  <div class="kpi"><small>المبيعات ({{ st.count }} فاتورة)</small><b>{{ st.sales|money }}</b></div>
+  <div class="kpi"><small>إجمالي الخصومات</small><b>{{ st.discount|money }}</b></div>
+  <div class="kpi good"><small>مجمل الربح (بعد الخصم)</small><b>{{ st.gross|money }}</b></div>
+  <div class="kpi"><small>المشتريات</small><b>{{ st.purchases|money }}</b></div>
+  <div class="kpi"><small>المصروفات</small><b>{{ st.expenses|money }}</b></div>
+  <div class="kpi {{ 'good' if st.net >= 0 else 'bad' }}"><small>صافي الربح</small><b>{{ st.net|money }}</b></div>
+  <div class="kpi"><small>قيمة المخزون الحالي (تكلفة)</small><b>{{ inv_cost|money }}</b></div>
+  <div class="kpi"><small>قيمة المخزون الحالي (بيع)</small><b>{{ inv_price|money }}</b></div>
+</div>
+<p class="muted">الربح = (سعر البيع − التكلفة وقت البيع) × الكمية − الخصومات. المبيعات الآجلة تُحسب عند إصدار الفاتورة.</p>
+
+<div class="grid g2">
+  <div class="card tw"><h3>المبيعات اليومية</h3>
+    <table><tr><th>اليوم</th><th>الفواتير</th><th>المبيعات</th><th>الربح</th></tr>
+    {% for d in by_day %}<tr><td class="num">{{ d.d }}</td><td class="num">{{ d.n }}</td><td class="num">{{ (d.gross_sales - (d.disc or 0))|money }}</td><td class="num">{{ (d.margin - (d.disc or 0))|money }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">لا توجد بيانات</td></tr>{% endfor %}</table></div>
+  <div class="card tw"><h3>الأكثر مبيعًا</h3>
+    <table><tr><th>المنتج</th><th>الكمية</th><th>الإيراد</th><th>الربح</th></tr>
+    {% for t in top %}<tr><td>{{ t.name }}</td><td class="num">{{ t.qty }}</td><td class="num">{{ t.rev|money }}</td><td class="num">{{ t.profit|money }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">لا توجد بيانات</td></tr>{% endfor %}</table></div>
+  <div class="card tw"><h3>المبيعات حسب الفئة</h3>
+    <table><tr><th>الفئة</th><th>الكمية</th><th>الإيراد</th></tr>
+    {% for c in by_cat %}<tr><td>{{ c.name }}</td><td class="num">{{ c.qty }}</td><td class="num">{{ c.rev|money }}</td></tr>
+    {% else %}<tr><td colspan="3" class="muted">لا توجد بيانات</td></tr>{% endfor %}</table></div>
+  <div class="card tw"><h3>المبيعات حسب المستخدم</h3>
+    <table><tr><th>المستخدم</th><th>الفواتير</th><th>الإجمالي</th></tr>
+    {% for u in by_user %}<tr><td>{{ u.name }}</td><td class="num">{{ u.n }}</td><td class="num">{{ u.total|money }}</td></tr>
+    {% else %}<tr><td colspan="3" class="muted">لا توجد بيانات</td></tr>{% endfor %}</table></div>
+</div>
+{% endblock %}

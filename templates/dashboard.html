@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}لوحة التحكم{% endblock %}
+{% block content %}
+<h2>لوحة التحكم</h2>
+{% include "_alerts.html" %}
+
+<h3 class="muted">اليوم</h3>
+<div class="grid g4" style="margin-bottom:16px">
+  <div class="kpi"><small>مبيعات اليوم ({{ td.count }} فاتورة)</small><b>{{ td.sales|money }} <small>{{ CURRENCY }}</small></b></div>
+  <div class="kpi good"><small>ربح اليوم (بعد الخصم)</small><b>{{ td.gross|money }}</b></div>
+  <div class="kpi"><small>مشتريات اليوم</small><b>{{ td.purchases|money }}</b></div>
+  <div class="kpi"><small>مصروفات اليوم</small><b>{{ td.expenses|money }}</b></div>
+</div>
+
+<h3 class="muted">الشهر الحالي</h3>
+<div class="grid g4" style="margin-bottom:16px">
+  <div class="kpi"><small>المبيعات ({{ mo.count }} فاتورة)</small><b>{{ mo.sales|money }}</b></div>
+  <div class="kpi"><small>المشتريات</small><b>{{ mo.purchases|money }}</b></div>
+  <div class="kpi"><small>المصروفات</small><b>{{ mo.expenses|money }}</b></div>
+  <div class="kpi {{ 'good' if mo.net >= 0 else 'bad' }}"><small>صافي الربح (بعد المصروفات)</small><b>{{ mo.net|money }}</b></div>
+</div>
+
+<h3 class="muted">المخزون والمديونيات</h3>
+<div class="grid g4" style="margin-bottom:16px">
+  <div class="kpi"><small>عدد المنتجات</small><b>{{ n_products }}</b></div>
+  <div class="kpi"><small>قيمة المخزون (بالتكلفة)</small><b>{{ inv_cost|money }}</b></div>
+  <div class="kpi"><small>قيمة المخزون (بسعر البيع)</small><b>{{ inv_price|money }}</b></div>
+  <div class="kpi {{ 'warn' if n_low else '' }}"><small>منتجات تحت الحد الأدنى</small><b>{{ n_low }}</b></div>
+  <div class="kpi"><small>مستحق لنا عند العملاء</small><b>{{ owed_by|money }}</b></div>
+  <div class="kpi"><small>مستحق للموردين</small><b>{{ owed_to|money }}</b></div>
+</div>
+
+<div class="grid g2">
+  <div class="card">
+    <h3>مبيعات آخر 7 أيام</h3>
+    <div class="bars">
+      {% for d, v in days %}<div><span>{{ v|round|int }}</span><i style="height:{{ (v / mx * 100)|round|int }}%"></i>{{ d }}</div>{% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    <h3>الأكثر مبيعًا هذا الشهر</h3>
+    <table><tr><th>المنتج</th><th>الكمية</th><th>الإيراد</th></tr>
+    {% for t in top %}<tr><td>{{ t.name }}</td><td class="num">{{ t.qty }}</td><td class="num">{{ t.rev|money }}</td></tr>
+    {% else %}<tr><td colspan="3" class="muted">لا توجد مبيعات بعد</td></tr>{% endfor %}</table>
+  </div>
+</div>
+
+<div class="card">
+  <h3>تنبيهات نقص المخزون {% if n_low > 10 %}<span class="muted">(أول 10 من {{ n_low }})</span>{% endif %}</h3>
+  <div class="tw"><table><tr><th>المنتج</th><th>الفئة</th><th>المتاح</th><th>الحد الأدنى</th></tr>
+  {% for p in low %}<tr><td>{{ p.name }}</td><td>{{ p.cat or '-' }}</td><td class="low num">{{ p.stock }}</td><td class="num">{{ p.min_qty }}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">كل المنتجات فوق الحد الأدنى</td></tr>{% endfor %}</table></div>
+  {% if n_low %}<p><a href="{{ url_for('products', low=1) }}">عرض كل المنتجات الناقصة</a></p>{% endif %}
+</div>
+{% endblock %}

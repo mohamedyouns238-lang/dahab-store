@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, csrf with context %}
+{% block title %}المنتجات{% endblock %}
+{% block content %}
+<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+  <h2 style="margin:0">المنتجات <span class="muted" style="font-size:14px">({{ total }})</span></h2>
+  <div class="row">
+    {% if g.user['role'] != 'cashier' %}<a class="btn sec" href="{{ url_for('export_inventory') }}">تصدير المخزون CSV</a><a class="btn" href="{{ url_for('product_new') }}">+ منتج جديد</a>{% endif %}
+  </div>
+</div>
+<form class="card row" method="get">
+  <div><label>بحث بالاسم أو الباركود</label><input name="q" value="{{ s }}" autofocus></div>
+  <div><label>الفئة</label><select name="cat"><option value="">الكل</option>{% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if cat == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></div>
+  <div><label>الماركة</label><select name="brand"><option value="">الكل</option>{% for b in brands %}<option value="{{ b.id }}" {{ 'selected' if brand == b.id|string }}>{{ b.name }}</option>{% endfor %}</select></div>
+  <div><label><input type="checkbox" name="low" value="1" {{ 'checked' if low }}> النواقص فقط</label></div>
+  <button class="btn">بحث</button>
+</form>
+<div class="card tw">
+<table>
+  <tr><th></th><th>الباركود</th><th>المنتج</th><th>الفئة</th><th>الماركة</th>{% if g.user['role'] != 'cashier' %}<th>التكلفة</th>{% endif %}<th>السعر</th><th>المخزون</th><th>الحد الأدنى</th>{% if g.user['role'] != 'cashier' %}<th></th>{% endif %}</tr>
+  {% for p in rows %}
+  <tr>
+    <td>{% if p.image %}<img class="thumb" src="{{ img_url(p.image) }}" alt="">{% else %}<span class="thumb ph">📦</span>{% endif %}</td>
+    <td class="num">{{ p.barcode or '-' }}</td><td>{{ p.name }}</td><td>{{ p.cat or '-' }}</td><td>{{ p.brand or '-' }}</td>
+    {% if g.user['role'] != 'cashier' %}<td class="num">{{ p.cost|money }}</td>{% endif %}
+    <td class="num">{{ p.price|money }}</td>
+    <td class="num {{ 'low' if p.stock <= p.min_qty }}">{{ p.stock }}</td><td class="num">{{ p.min_qty }}</td>
+    {% if g.user['role'] != 'cashier' %}<td class="row"><a class="btn sec sm" href="{{ url_for('product_edit', pid=p.id) }}">تعديل</a>
+      <form method="post" action="{{ url_for('product_delete', pid=p.id) }}" onsubmit="return confirm('حذف المنتج؟')">{{ csrf() }}<button class="btn red sm">حذف</button></form></td>{% endif %}
+  </tr>
+  {% else %}<tr><td colspan="10" class="muted">لا توجد منتجات</td></tr>{% endfor %}
+</table>
+</div>
+{{ pager(page, pages) }}
+{% endblock %}

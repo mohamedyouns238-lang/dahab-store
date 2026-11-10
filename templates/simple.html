@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}{{ cfg.title }}{% endblock %}
+{% block content %}
+<h2>{{ cfg.title }}</h2>
+{% if kind == 'customers' %}
+<div class="card row" style="justify-content:space-between;align-items:center">
+  <p class="muted" style="margin:0;flex:1;min-width:260px">العملاء الذين يسجّلهم الكاشير أثناء البيع يظهرون هنا تلقائيًا. حدّد «خصم العميل %» ليظهر للكاشير فور كتابة رقم هاتف العميل ويُطبَّق تلقائيًا على فاتورته.</p>
+  <form method="post" class="row" style="flex-wrap:nowrap">{{ csrf() }}<input type="hidden" name="action" value="require_customer">
+    <label style="margin:0;color:inherit"><input type="checkbox" name="require" value="1" {{ 'checked' if require_customer }}> إلزام الكاشير بإدخال اسم ورقم العميل</label>
+    <button class="btn sec sm">حفظ</button></form>
+</div>
+{% endif %}
+<form method="post" class="card">
+  {{ csrf() }}
+  {% if edit %}<input type="hidden" name="id" value="{{ edit['id'] }}">{% endif %}
+  <h3>{{ 'تعديل' if edit else 'إضافة جديد' }}</h3>
+  <div class="row">
+    {% for col, label in cfg.fields %}<div><label>{{ label }}</label>
+      {% if col == 'discount' %}<input name="discount" type="number" min="0" max="100" step="0.01" value="{{ '%g'|format(edit['discount'] or 0) if edit else 0 }}" style="width:110px">
+      {% else %}<input name="{{ col }}" value="{{ edit[col] if edit and edit[col] else '' }}" {{ 'required' if loop.first }}>{% endif %}</div>{% endfor %}
+    <button class="btn">حفظ</button>
+    {% if edit %}<a class="btn sec" href="{{ url_for('simple', kind=kind) }}">إلغاء</a>{% endif %}
+  </div>
+</form>
+{% if 'phone' in cfg.fields|map(attribute=0) %}
+<form class="card row" method="get"><div><label>بحث بالاسم أو الهاتف</label><input name="q" value="{{ s }}"></div><button class="btn">بحث</button></form>
+{% endif %}
+<div class="card tw">
+<table>
+  <tr>{% for col, label in cfg.fields %}<th>{{ label }}</th>{% endfor %}{% if kind == 'customers' %}<th>الفواتير</th><th>إجمالي المشتريات</th>{% endif %}{% if cfg.balance %}<th>المديونية</th><th>تسجيل دفعة</th>{% endif %}<th></th></tr>
+  {% for r in rows %}
+  <tr>
+    {% for col, label in cfg.fields %}<td>{% if col == 'discount' %}{% if r['discount'] %}<span class="tag ok">{{ '%g'|format(r['discount']) }}%</span>{% else %}-{% endif %}{% else %}{{ r[col] or '-' }}{% endif %}</td>{% endfor %}
+    {% if kind == 'customers' %}<td class="num">{{ r['n_sales'] }}</td><td class="num">{{ r['spent']|money }}</td>{% endif %}
+    {% if cfg.balance %}
+    <td class="num {{ 'low' if r['balance'] > 0 }}">{{ r['balance']|money }}</td>
+    <td>{% if r['balance'] > 0 %}<form method="post" action="{{ url_for('simple_pay', kind=kind, rid=r['id']) }}" class="row" style="flex-wrap:nowrap">{{ csrf() }}
+      <input name="amount" type="number" step="0.01" min="0.01" max="{{ r['balance'] }}" placeholder="المبلغ" style="width:100px"><button class="btn sm">دفع</button></form>{% else %}<span class="muted">—</span>{% endif %}</td>
+    {% endif %}
+    <td class="row"><a class="btn sec sm" href="{{ url_for('simple', kind=kind, edit=r['id']) }}">تعديل</a>
+      {% if g.user['role'] in cfg.delete %}<form method="post" action="{{ url_for('simple_delete', kind=kind, rid=r['id']) }}" onsubmit="return confirm('أرشفة هذا السجل؟ (يختفي من القوائم وتبقى بياناته القديمة)')">{{ csrf() }}<button class="btn red sm">أرشفة</button></form>{% endif %}</td>
+  </tr>
+  {% else %}<tr><td colspan="10" class="muted">لا توجد بيانات</td></tr>{% endfor %}
+</table>
+</div>
+{% endblock %}

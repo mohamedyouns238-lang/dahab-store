@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}المستخدمون{% endblock %}
+{% block content %}
+<h2>المستخدمون والصلاحيات</h2>
+<form method="post" class="card">
+  {{ csrf() }}
+  <h3>مستخدم جديد</h3>
+  <div class="row">
+    <div><label>اسم المستخدم</label><input name="username" required></div>
+    <div><label>الاسم الكامل</label><input name="full_name" required></div>
+    <div><label>الدور</label><select name="role">{% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if k == 'cashier' }}>{{ v }}</option>{% endfor %}</select></div>
+    <div><label>كلمة المرور (6+)</label><input name="password" type="password" required minlength="6"></div>
+    <button class="btn">إضافة</button>
+  </div>
+  <p class="muted">مدير النظام: كل شيء. مدير: كل شيء عدا المستخدمين وسجل المراجعة والنسخ الاحتياطي. كاشير: البيع وعرض المنتجات والعملاء وفواتيره اليوم فقط.</p>
+</form>
+{% for u in rows %}<form id="f{{ u.id }}" method="post" action="{{ url_for('user_edit', uid=u.id) }}">{{ csrf() }}</form>{% endfor %}
+<div class="card tw">
+<table>
+  <tr><th>المستخدم</th><th>الاسم</th><th>الدور</th><th>مفعّل</th><th>كلمة مرور جديدة</th><th></th></tr>
+  {% for u in rows %}
+  <tr>
+    <td>{{ u.username }}{{ ' (أنت)' if u.id == g.user['id'] }}</td>
+    <td><input form="f{{ u.id }}" name="full_name" value="{{ u.full_name }}"></td>
+    <td><select form="f{{ u.id }}" name="role">{% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if k == u.role }}>{{ v }}</option>{% endfor %}</select></td>
+    <td><input form="f{{ u.id }}" type="checkbox" name="active" value="1" {{ 'checked' if u.active }}></td>
+    <td><input form="f{{ u.id }}" name="password" type="password" placeholder="اتركه فارغًا" autocomplete="new-password"></td>
+    <td><button form="f{{ u.id }}" class="btn sm">حفظ</button></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p><a class="btn sec" href="{{ url_for('backup') }}">تنزيل نسخة احتياطية من قاعدة البيانات</a></p>
+{% endblock %}

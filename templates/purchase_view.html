@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}{{ p.ref }}{% endblock %}
+{% block content %}
+<h2>فاتورة شراء {{ p.ref }} {% if p.status != 'active' %}<span class="tag bad">ملغاة</span>{% endif %}</h2>
+<div class="card">
+  <p>التاريخ: {{ p.created_at|dt }} &nbsp;|&nbsp; المورد: {{ p.supplier or '-' }} &nbsp;|&nbsp; المستخدم: {{ p.user or '-' }}{% if p.note %}<br>ملاحظة: {{ p.note }}{% endif %}</p>
+  <div class="tw"><table>
+    <tr><th>الصنف</th><th>الكمية</th><th>التكلفة</th><th>الإجمالي</th></tr>
+    {% for i in items %}<tr><td>{{ i.name }}</td><td class="num">{{ i.qty }}</td><td class="num">{{ i.cost|money }}</td><td class="num">{{ (i.qty * i.cost)|money }}</td></tr>{% endfor %}
+  </table></div>
+  <div class="sumrow big"><span>الإجمالي</span><span class="num">{{ p.total|money }}</span></div>
+  <div class="sumrow"><span>المدفوع</span><span class="num">{{ p.paid|money }}</span></div>
+  {% if p.paid < p.total - 0.005 %}<div class="sumrow"><span>المتبقي للمورد</span><b class="num low">{{ (p.total - p.paid)|money }}</b></div>{% endif %}
+</div>
+<div class="row">
+  <a class="btn sec" href="{{ url_for('purchases') }}">رجوع</a>
+  {% if p.status == 'active' and g.user['role'] == 'admin' %}
+  <form method="post" action="{{ url_for('purchase_cancel', pid=p.id) }}" onsubmit="return confirm('إلغاء فاتورة الشراء وخصم الكميات من المخزون؟')">{{ csrf() }}<button class="btn red">إلغاء الفاتورة</button></form>{% endif %}
+</div>
+{% endblock %}

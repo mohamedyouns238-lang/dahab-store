@@ -1,0 +1,2 @@
+{% for lvl, msg in alerts or [] %}<div class="flash {{ 'err' if lvl == 'err' else 'warn' }}">{{ msg }}</div>{% endfor %}
+{% if alerts and g.user['role'] == 'admin' and request.endpoint == 'backups' %}<form method="post" style="margin-bottom:12px"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="ack"><button class="btn sec sm">إخفاء التنبيهات الحالية</button></form>{% endif %}

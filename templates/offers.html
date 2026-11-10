@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}العروض{% endblock %}
+{% block content %}
+<h2>العروض</h2>
+{% if can_edit %}
+<form method="post" enctype="multipart/form-data" class="card">
+  {{ csrf() }}
+  {% if edit %}<input type="hidden" name="id" value="{{ edit['id'] }}">{% endif %}
+  <h3>{{ 'تعديل العرض' if edit else 'عرض جديد' }}</h3>
+  <div class="f">
+    <div><label>عنوان العرض *</label><input name="title" value="{{ edit['title'] if edit else '' }}" required maxlength="120"></div>
+    <div><label>المنتج (لتطبيق الخصم تلقائيًا في الكاشير)</label>
+      <select name="product_id"><option value="">— عرض عام بدون منتج محدد —</option>
+        {% for p in prods %}<option value="{{ p.id }}" {{ 'selected' if edit and edit['product_id'] == p.id }}>{{ p.name }}</option>{% endfor %}</select></div>
+    <div><label>نسبة الخصم %</label><input name="percent" type="number" min="0" max="100" step="0.01" value="{{ '%g'|format(edit['percent']) if edit else 0 }}"></div>
+    <div><label>يبدأ في (اختياري)</label><input name="starts_on" type="date" value="{{ edit['starts_on'] if edit else '' }}"></div>
+    <div><label>ينتهي في (اختياري)</label><input name="ends_on" type="date" value="{{ edit['ends_on'] if edit else '' }}"></div>
+    <div><label>صورة العرض (اختياري)</label><input name="image" type="file" accept="image/*">
+      {% if edit and edit['image'] %}<div class="row" style="margin-top:6px"><img class="thumb big" src="{{ img_url(edit['image']) }}" alt=""><label style="margin:0;color:inherit"><input type="checkbox" name="remove_image" value="1"> إزالة الصورة</label></div>{% endif %}</div>
+  </div>
+  <div style="margin-top:12px"><label>تفاصيل العرض</label><textarea name="details" rows="2" maxlength="500" style="width:100%">{{ edit['details'] if edit and edit['details'] else '' }}</textarea></div>
+  <div class="row" style="margin-top:12px"><button class="btn">حفظ العرض</button>{% if edit %}<a class="btn sec" href="{{ url_for('offers') }}">إلغاء</a>{% endif %}</div>
+  <p class="muted" style="margin:10px 0 0">العرض المرتبط بمنتج ونسبة خصم يُطبَّق تلقائيًا على سعر المنتج في الكاشير طوال فترته. الكاشير يرى العروض فقط ولا يستطيع تعديلها.</p>
+</form>
+{% endif %}
+
+<div class="offgrid">
+{% for o in rows %}
+  <div class="card offcard {{ 'dim' if can_edit and offer_status(o) != 'نشط' }}">
+    {% if o.image %}<img class="offimg" src="{{ img_url(o.image) }}" alt="">{% else %}<div class="offimg ph">🏷️</div>{% endif %}
+    <div class="offbody">
+      <h3 style="margin:0 0 4px">{{ o.title }} {% if o.percent %}<span class="tag ok">خصم {{ '%g'|format(o.percent) }}%</span>{% endif %}
+        {% if can_edit %}<span class="tag {{ 'ok' if offer_status(o) == 'نشط' else 'warn' }}">{{ offer_status(o) }}</span>{% endif %}</h3>
+      {% if o.pname %}<div class="muted">المنتج: {{ o.pname }}{% if o.pprice %} — السعر الآن {{ (o.pprice * (1 - o.percent / 100))|money }} بدل {{ o.pprice|money }}{% endif %}</div>{% endif %}
+      {% if o.details %}<p style="margin:6px 0">{{ o.details }}</p>{% endif %}
+      <div class="muted">{% if o.starts_on or o.ends_on %}{{ ('من ' ~ o.starts_on) if o.starts_on }} {{ ('حتى ' ~ o.ends_on) if o.ends_on }}{% else %}بدون تاريخ انتهاء{% endif %}</div>
+      {% if can_edit %}<div class="row" style="margin-top:8px"><a class="btn sec sm" href="{{ url_for('offers', edit=o.id) }}">تعديل</a>
+        <form method="post" action="{{ url_for('offer_toggle', oid=o.id) }}">{{ csrf() }}<button class="btn {{ 'red' if o.active else 'sec' }} sm">{{ 'أرشفة' if o.active else 'إعادة تفعيل' }}</button></form></div>{% endif %}
+    </div>
+  </div>
+{% else %}<div class="card muted">لا توجد عروض حاليًا</div>{% endfor %}
+</div>
+{% endblock %}

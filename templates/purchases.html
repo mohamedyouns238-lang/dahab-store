@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager with context %}
+{% block title %}المشتريات{% endblock %}
+{% block content %}
+<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+  <h2 style="margin:0">فواتير المشتريات</h2>
+  <a class="btn" href="{{ url_for('purchase_new') }}">+ فاتورة شراء</a>
+</div>
+<div class="card tw">
+<table>
+  <tr><th>المرجع</th><th>التاريخ</th><th>المورد</th><th>الإجمالي</th><th>المدفوع</th><th>الحالة</th><th></th></tr>
+  {% for p in rows %}
+  <tr><td>{{ p.ref }}</td><td class="num">{{ p.created_at|dt }}</td><td>{{ p.supplier or '-' }}</td>
+    <td class="num">{{ p.total|money }}</td><td class="num {{ 'low' if p.paid < p.total - 0.005 and p.status == 'active' }}">{{ p.paid|money }}</td>
+    <td>{% if p.status == 'active' %}<span class="tag ok">نشطة</span>{% else %}<span class="tag bad">ملغاة</span>{% endif %}</td>
+    <td><a class="btn sec sm" href="{{ url_for('purchase_view', pid=p.id) }}">عرض</a></td></tr>
+  {% else %}<tr><td colspan="7" class="muted">لا توجد فواتير شراء</td></tr>{% endfor %}
+</table>
+</div>
+{{ pager(page, pages) }}
+{% endblock %}
