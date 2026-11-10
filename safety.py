@@ -49,7 +49,7 @@ for _d in (DATA_DIR, BACKUP_DIR, LOG_DIR, IMAGE_DIR):
 
 DEFAULTS = {"store_name": "Dahab Store", "currency": "ج.م", "extra_backup_dir": "",
             "silent_print": False, "lan_access": False, "port": 58321,
-            "store_phone": "01144181826"}
+            "store_phone": "01144181826", "site_url": ""}
 ROTATING = ("auto", "start", "exit")          # هذه فقط تُحذف تلقائيًا عند التدوير
 log = logging.getLogger("dahab")
 _lock = threading.RLock()

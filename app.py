@@ -21,6 +21,7 @@ from flask import (Flask, Response, abort, flash, g, jsonify, redirect,
                    render_template, request, send_file, send_from_directory, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import qrcode_py
 import safety
 
 BASE = safety.BASE
@@ -760,7 +761,13 @@ def media(name):
 # ------------------------------------------- إعدادات المتجر (رقم التليفون)
 def shop_info():
     """رقم المحل لعرضه على الفاتورة."""
-    return dict(phone=(safety.load_config().get("store_phone") or "").strip(), url="", qr=[])
+    cfg = safety.load_config()
+    url = (cfg.get("site_url") or "").strip()
+    try:
+        rows = qrcode_py.rows(url) if url else []
+    except ValueError:
+        rows = []
+    return dict(phone=(cfg.get("store_phone") or "").strip(), url=url, qr=rows)
 
 
 def mark_site_dirty():
@@ -772,16 +779,20 @@ def mark_site_dirty():
 def settings_page():
     if request.method == "POST":
         phone = request.form.get("phone", "").strip()
+        url = request.form.get("site_url", "").strip()
         if phone and not (re.fullmatch(r"\+?[0-9 \-()]{5,25}", phone) and 5 <= len(re.sub(r"\D", "", phone)) <= 16):
             flash("رقم التليفون غير صحيح", "err")
+        elif url and not (re.match(r"^https?://[^\s]+$", url) and len(url.encode()) <= qrcode_py.MAX_BYTES):
+            flash("الرابط لازم يبدأ بـ https:// وما يزيدش عن 200 حرف تقريبًا", "err")
         else:
             cfg = safety.load_config()
             cfg["store_phone"] = phone
+            cfg["site_url"] = url
             safety.save_config(cfg)
             audit("settings_save", "رقم تليفون المحل")
             flash("تم حفظ الإعدادات", "ok")
         return redirect(url_for("settings_page"))
-    return render_template("settings.html", phone=shop_info()["phone"])
+    return render_template("settings.html", phone=shop_info()["phone"], site_url=shop_info()["url"])
 
 
 # ----------------------------------------------------------------- offers
@@ -1120,7 +1131,7 @@ def sale_view(sid):
     items = q("SELECT si.*, p.name FROM sale_items si JOIN products p ON p.id=si.product_id WHERE si.sale_id=?", (sid,))
     shop = shop_info()
     return render_template("sale_view.html", s=s, items=items, print_now=request.args.get("print"), shop=shop,
-                           qr_svg="")
+                           qr_svg=qrcode_py.svg(shop["url"], scale=3, border=2) if shop["url"] else "")
 
 
 @app.route("/sales/<int:sid>/cancel", methods=["POST"])

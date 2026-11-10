@@ -5,7 +5,11 @@
 <h2>إعدادات المتجر</h2>
 <form method="post" class="card">
   {{ csrf() }}
-  <div class="f"><div><label>رقم تليفون / واتساب المحل (يظهر على الفاتورة)</label><input name="phone" value="{{ phone }}" dir="ltr" placeholder="01XXXXXXXXX"></div></div>
+  <div class="f">
+    <div><label>رقم تليفون / واتساب المحل (يظهر على الفاتورة)</label><input name="phone" value="{{ phone }}" dir="ltr" placeholder="01XXXXXXXXX"></div>
+    <div><label>رابط صفحة العروض (يتحوّل لـ QR على الفاتورة)</label><input name="site_url" value="{{ site_url }}" dir="ltr" placeholder="https://..."></div>
+  </div>
+  <p class="muted">اكتب رابط صفحة العروض بتاعتك. أي عميل يمسح الـ QR من الفاتورة يفتح الرابط ده. سيب الخانة فاضية لو مش عايز QR.</p>
   <div class="row" style="margin-top:14px"><button class="btn">حفظ</button></div>
 </form>
 {% endblock %}
