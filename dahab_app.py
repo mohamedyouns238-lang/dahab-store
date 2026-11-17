@@ -27,46 +27,28 @@ import threading
 import time
 import urllib.request
 
-import bootstrap
-
-if "--selftest" not in sys.argv:
-    os.environ["DAHAB_LAUNCHER"] = "1"           # يفعّل نظام التحديث (غير متاح خارج المُشغّل)
-safety = None                                     # يُحمَّل بعد اختيار الإصدار الفعّال (الأصلي أو المحدَّث)
+safety = None
 log = logging.getLogger("dahab")
 SIGNATURE = b"DAHAB-OK"
 
 
+def data_dir():
+    if os.environ.get("DB_PATH"):
+        return os.path.dirname(os.path.abspath(os.environ["DB_PATH"]))
+    if os.environ.get("DATA_DIR"):
+        return os.environ["DATA_DIR"]
+    if os.name == "nt":
+        return os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "DahabStore")
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 def early_config():
-    """يقرأ الإعدادات قبل تحميل أي كود قابل للتحديث (المنفذ فقط)."""
     import json
     try:
-        with open(os.path.join(bootstrap.data_dir(), "config.json"), encoding="utf-8") as f:
+        with open(os.path.join(data_dir(), "config.json"), encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError):
         return {}
-
-
-def write_selftest(ok, **kw):
-    out = os.environ.get("DAHAB_SELFTEST_OUT")
-    if out:
-        import json
-        try:
-            with open(out, "w", encoding="utf-8") as f:
-                json.dump(dict(ok=ok, **kw), f, ensure_ascii=False)
-        except OSError:
-            pass
-
-
-def spawn_self(*extra):
-    """يشغّل نسخة جديدة من البرنامج بعد إغلاق هذه (إعادة التشغيل بعد التحديث)."""
-    args = ([sys.executable] if getattr(sys, "frozen", False) else [sys.executable, os.path.abspath(__file__)]) + list(extra)
-    kw = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
-    if os.name == "nt":
-        kw["creationflags"] = 0x00000008 | 0x00000200      # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    else:
-        kw["start_new_session"] = True
-    env = {k: v for k, v in os.environ.items() if k != "DAHAB_OVERRIDE"}
-    return subprocess.Popen(args, env=env, **kw)
 
 
 # ------------------------------------------------------------------ helpers
@@ -124,7 +106,7 @@ def open_window(url, cfg):
         webbrowser.open(url)
         log.warning("لم يُعثر على Edge/Chrome — فُتح المتصفح الافتراضي")
         return None
-    args = [exe, f"--app={url}", f"--user-data-dir={os.path.join(bootstrap.data_dir(), 'browser')}",
+    args = [exe, f"--app={url}", f"--user-data-dir={os.path.join(data_dir(), 'browser')}",
             "--no-first-run", "--no-default-browser-check", "--disable-background-mode",
             "--disable-sync", "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
             "--disable-backgrounding-occluded-windows", "--start-maximized", "--lang=ar", "--disable-features=Translate"]
@@ -171,7 +153,6 @@ def main(argv=None):
     ap.add_argument("--headless", action="store_true", help="بدون نافذة (للاختبار/السيرفر)")
     ap.add_argument("--selftest", action="store_true", help="فحص ذاتي ثم خروج")
     ap.add_argument("--port", type=int)
-    ap.add_argument("--restarted", action="store_true", help="إعادة تشغيل بعد تحديث (بدون نافذة جديدة)")
     opts = ap.parse_args(argv)
 
     cfg = early_config()
@@ -181,14 +162,9 @@ def main(argv=None):
         port = free_port()
 
     state = port_state(port)
-    if state == "ours" and opts.restarted:       # النسخة القديمة لسه بتقفل: انتظر تحرير المنفذ
-        end = time.time() + 25
-        while state == "ours" and time.time() < end:
-            time.sleep(0.5)
-            state = port_state(port)
     if state == "ours":                          # نسخة شغّالة بالفعل: افتح نافذة جديدة عليها فقط
         log.info("النظام يعمل بالفعل — فتح نافذة جديدة")
-        if not opts.headless and not opts.restarted:
+        if not opts.headless:
             open_window(f"http://127.0.0.1:{port}", early_config())
         return 0
     if state == "other":
@@ -196,16 +172,10 @@ def main(argv=None):
         log.warning("المنفذ مشغول ببرنامج آخر — استُخدم المنفذ %s", port)
 
     global safety
-    ov = os.environ.get("DAHAB_OVERRIDE") if opts.selftest else bootstrap.begin_boot()   # الإصدار الفعّال
-    try:
-        A = bootstrap.load_all(ov)               # فحص السلامة + الترقية + تشغيل النسخ الاحتياطي
-    except BaseException as e:
-        write_selftest(False, error=f"{type(e).__name__}: {e}")
-        raise
-    safety = sys.modules["safety"]
+    import safety as _safety
+    safety = _safety
     safety.setup_logging()
-    if os.environ.get("DAHAB_OVERRIDE"):
-        log.info("تشغيل الإصدار المحدَّث: %s", os.environ["DAHAB_OVERRIDE"])
+    import app as A                              # فحص السلامة + الترقية + تشغيل النسخ الاحتياطي
     cfg = safety.load_config()
     url = f"http://127.0.0.1:{port}"
     try:
@@ -245,13 +215,11 @@ def main(argv=None):
             except (ValueError, OSError):
                 pass
 
-    code, restart, confirmed = 0, False, False
+    code = 0
     if opts.selftest:
         code = selftest(url)
     else:
-        if getattr(A, "start_cloud", None):
-            A.start_cloud()                      # نشر العروض + فحص التحديثات في الخلفية
-        proc = None if (opts.headless or opts.restarted) else open_window(url, cfg)
+        proc = None if opts.headless else open_window(url, cfg)
         started = last_loop = time.time()
         stale_after = float(os.environ.get("DAHAB_STALE", 150))     # النافذة أُغلقت + لا نشاط
         first_ping_wait = float(os.environ.get("DAHAB_FIRST", 900))  # لم تُفتح الصفحة قط
@@ -266,16 +234,6 @@ def main(argv=None):
             age = now - act
             pinged = pinged or A.LAST_PING[0] > started
             window_gone = proc is None or proc.poll() is not None
-            if not confirmed and (pinged or now - started > float(os.environ.get("DAHAB_CONFIRM", 40))):
-                confirmed = True
-                try:
-                    bootstrap.confirm_boot()     # الإصدار الجديد ثبت — لا تراجع بعد الآن
-                except Exception:
-                    log.exception("confirm_boot")
-            mode = bootstrap.RESTART["mode"]
-            if mode == "now" or (mode == "idle" and now - A.LAST_ACTIVITY[0] >= 120):
-                restart = True
-                break
             if opts.headless:
                 continue
             # لا نقفل السيرفر بسرعة: المتصفح يبطّئ مؤقتات الصفحة المصغّرة/المغطاة فتقلّ النبضات (قفل خاطئ = مشكلة للمحل)
@@ -294,9 +252,6 @@ def main(argv=None):
         safety.make_backup("exit")
     except Exception:
         log.exception("exit backup")
-    if restart:
-        log.info("إعادة تشغيل لتفعيل التحديث")
-        spawn_self("--restarted", *(["--headless"] if opts.headless else []), *(["--port", str(port)] if opts.port else []))
     return code
 
 
@@ -325,13 +280,10 @@ def selftest(url):
             A.app.jinja_env.get_template(n)
         qr = sys.modules["qrcode_py"].matrix("https://example.com/")
         assert len(qr) >= 21, "qr"
-        build = sys.modules["version"].BUILD
-        write_selftest(True, build=build)
-        print("SELFTEST OK build=%s" % build)
+        print("SELFTEST OK")
         return 0
     except Exception as e:
         log.exception("selftest failed")
-        write_selftest(False, error=f"{type(e).__name__}: {e}")
         print("SELFTEST FAILED:", e)
         return 2
 
@@ -344,5 +296,5 @@ if __name__ == "__main__":
         raise
     except Exception as exc:
         log.exception("fatal")
-        message_box(f"حدث خطأ أثناء التشغيل:\n{exc}\n\nالتفاصيل في: {os.path.join(bootstrap.data_dir(), 'logs', 'app.log')}")
+        message_box(f"حدث خطأ أثناء التشغيل:\n{exc}\n\nالتفاصيل في: {os.path.join(data_dir(), 'logs', 'app.log')}")
         sys.exit(1)

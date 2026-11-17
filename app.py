@@ -21,12 +21,8 @@ from flask import (Flask, Response, abort, flash, g, jsonify, redirect,
                    render_template, request, send_file, send_from_directory, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
-import bootstrap
-import cloud
 import qrcode_py
 import safety
-import updater
-import version
 
 BASE = safety.BASE
 DB_PATH = safety.DB_PATH
@@ -447,7 +443,7 @@ NAV = [
     ("stocktake", "الجرد", MGR),
     ("stock_moves", "حركة المخزون", MGR),
     ("users", "المستخدمون", ("admin",)),
-    ("backups", "النسخ الاحتياطي والتحديثات", MGR),
+    ("backups", "النسخ الاحتياطي", MGR),
     ("audit_view", "سجل المراجعة", ("admin",)),
 ]
 
@@ -762,137 +758,41 @@ def media(name):
     return send_from_directory(safety.IMAGE_DIR, name, max_age=2592000)
 
 
-# ------------------------------------------- موقع العروض (GitHub Pages) + QR
+# ------------------------------------------- إعدادات المتجر (رقم التليفون)
 def shop_info():
-    """رقم المحل + رابط صفحة العروض + مصفوفة QR للفاتورة."""
-    st = cloud.settings()
-    url = cloud.site_url_effective(st)
+    """رقم المحل لعرضه على الفاتورة."""
+    cfg = safety.load_config()
+    url = (cfg.get("site_url") or "").strip()
     try:
         rows = qrcode_py.rows(url) if url else []
     except ValueError:
         rows = []
-    return dict(phone=st["phone"], url=url, qr=rows)
-
-
-BG_PUBLISH = True          # (الاختبارات تعطّله لتجنب التسابق)
+    return dict(phone=(cfg.get("store_phone") or "").strip(), url=url, qr=rows)
 
 
 def mark_site_dirty():
-    """يسجل أن الموقع يحتاج نشرًا؛ يُنشر فورًا في الخلفية وإلا يُعاد المحاولة تلقائيًا عند توفر الإنترنت."""
-    safety.set_status(site_dirty=True)
-    if BG_PUBLISH and os.environ.get("DAHAB_LAUNCHER") == "1":
-        threading.Thread(target=publish_site_job, daemon=True, name="dahab-publish").start()
-
-
-_pub_lock = threading.Lock()
-
-
-def offers_payload():
-    st = cloud.settings()
-    t = date.today().isoformat()
-    rows = q("""SELECT o.*, p.name pname, p.price pprice, p.image pimage FROM offers o LEFT JOIN products p ON p.id=o.product_id
-                WHERE o.active=1 AND (o.ends_on='' OR o.ends_on>=?) ORDER BY o.id DESC""", (t,))
-    items, images = [], {}
-    for o in rows:
-        img = o["image"] or o["pimage"]
-        path = ""
-        if img and re.fullmatch(r"[0-9a-f]{24}\.(jpg|png|webp|gif)", img):
-            try:
-                with open(os.path.join(safety.IMAGE_DIR, img), "rb") as f:
-                    images[img] = f.read()
-                path = "img/" + img
-            except OSError:
-                pass
-        pct = float(o["percent"] or 0)
-        items.append(dict(id=o["id"], title=o["title"], details=o["details"] or "", percent=pct, starts_on=o["starts_on"],
-                          ends_on=o["ends_on"], image=path, product=o["pname"] or "",
-                          price_old=o["pprice"] if o["pprice"] and pct else None,
-                          price_now=round(o["pprice"] * (1 - pct / 100), 2) if o["pprice"] and pct else None))
-    return dict(store=st["store"], phone=st["phone"], currency=CURRENCY, offers=items), images
-
-
-def publish_site_job():
-    """ينشر موقع العروض. آمن: لا يرفع أخطاء ولا يؤثر على الكاشير. -> (ok, msg)"""
-    if not _pub_lock.acquire(blocking=False):
-        return False, "عملية نشر جارية"
-    try:
-        st = cloud.settings()
-        if not cloud.REPO_RE.match(st["repo"]) or not st["token"]:
-            return False, "لم يتم إعداد GitHub بعد"
-        with app.app_context():
-            payload, images = offers_payload()
-        with open(safety.resource_path("site", "index.html"), encoding="utf-8") as f:
-            html = f.read()
-        ok, msg, url = cloud.publish_site(payload, images, html, st)
-        safety.set_status(site_dirty=not ok, site_ok=ok, site_msg=msg, site_time=now())
-        if ok and url and not st["site_url"]:
-            cfg = safety.load_config()
-            cfg["site_url"] = url
-            safety.save_config(cfg)
-        return ok, msg
-    except Exception as e:
-        log.exception("publish_site_job")
-        safety.set_status(site_dirty=True, site_ok=False, site_msg=f"خطأ: {e}")
-        return False, str(e)
-    finally:
-        _pub_lock.release()
-
-
-def start_cloud():
-    """يُستدعى من المُشغّل: عامل خلفية للنشر وفحص التحديثات."""
-    st = cloud.settings()
-    if cloud.REPO_RE.match(st["repo"]) and st["token"] and not safety.get_status().get("site_ok"):
-        safety.set_status(site_dirty=True)
-    w = cloud.Worker(publish_site_job, updater.check_remote)
-    w.start()
-    return w
+    pass
 
 
 @app.route("/settings", methods=["GET", "POST"])
 @login_required(MGR)
 def settings_page():
-    is_admin = g.user["role"] == "admin"
     if request.method == "POST":
-        f, act = request.form, request.form.get("action", "save")
-        cfg = safety.load_config()
-        try:
-            if act == "save":
-                phone = f.get("phone", "").strip()
-                if phone and not (re.fullmatch(r"\+?[0-9 \-()]{5,25}", phone) and 5 <= len(re.sub(r"\D", "", phone)) <= 16):
-                    raise ValueError("رقم التليفون غير صحيح")
-                cfg["store_phone"] = phone
-                if is_admin:
-                    repo = f.get("repo", "").strip().strip("/")
-                    if repo and not cloud.REPO_RE.match(repo):
-                        raise ValueError("اسم المستودع يجب أن يكون بالشكل: اسم-المستخدم/اسم-المستودع")
-                    url = f.get("site_url", "").strip()
-                    if url and not re.match(r"^https://[^\s]+$", url):
-                        raise ValueError("رابط الموقع يجب أن يبدأ بـ https://")
-                    cfg.update(github_repo=repo, site_url=url, auto_update=bool(f.get("auto_update")))
-                    if f.get("token", "").strip():
-                        cfg["github_token"] = f["token"].strip()
-                    elif f.get("clear_token"):
-                        cfg["github_token"] = ""
-                safety.save_config(cfg)
-                audit("settings_save", "إعدادات المتجر")
-                mark_site_dirty()
-                flash("تم حفظ الإعدادات", "ok")
-            elif act == "publish":
-                ok, msg = publish_site_job()
-                flash(msg, "ok" if ok else "err")
-            elif act in ("test", "check_updates") and is_admin:
-                if act == "test":
-                    ok, msg = cloud.test_connection()
-                else:
-                    msg = updater.check_remote(force=True)
-                    ok = True
-                flash(msg, "ok" if ok else "err")
-        except ValueError as e:
-            flash(str(e), "err")
+        phone = request.form.get("phone", "").strip()
+        url = request.form.get("site_url", "").strip()
+        if phone and not (re.fullmatch(r"\+?[0-9 \-()]{5,25}", phone) and 5 <= len(re.sub(r"\D", "", phone)) <= 16):
+            flash("رقم التليفون غير صحيح", "err")
+        elif url and not (re.match(r"^https?://[^\s]+$", url) and len(url.encode()) <= qrcode_py.MAX_BYTES):
+            flash("الرابط لازم يبدأ بـ https:// وما يزيدش عن 200 حرف تقريبًا", "err")
+        else:
+            cfg = safety.load_config()
+            cfg["store_phone"] = phone
+            cfg["site_url"] = url
+            safety.save_config(cfg)
+            audit("settings_save", "رقم تليفون المحل")
+            flash("تم حفظ الإعدادات", "ok")
         return redirect(url_for("settings_page"))
-    st = cloud.settings()
-    return render_template("settings.html", st=st, status=safety.get_status(), is_admin=is_admin,
-                           site=cloud.site_url_effective(st), has_token=bool(st["token"]), upd=updater.info())
+    return render_template("settings.html", phone=shop_info()["phone"], site_url=shop_info()["url"])
 
 
 # ----------------------------------------------------------------- offers
@@ -1497,7 +1397,7 @@ def backup():
 # ------------------------------------------------- health / alerts / ping
 @app.route("/health")
 def health():
-    return f"DAHAB-OK build={version.BUILD}"
+    return "DAHAB-OK"
 
 
 @app.route("/ping")
@@ -1647,50 +1547,7 @@ def backups():
         return redirect(url_for("backups"))
     return render_template("backups.html", items=safety.list_backups(), st=safety.get_status(),
                            cfg=safety.load_config(), alerts=health_alerts(), data_dir=safety.DATA_DIR,
-                           upd=updater.info(), is_admin=g.user["role"] == "admin",
-                           cloud_ready=bool(cloud.REPO_RE.match(cloud.settings()["repo"]) and cloud.settings()["token"]))
-
-
-@app.route("/updates/upload", methods=["POST"])
-@login_required(MGR)
-def update_upload():
-    """رفع ملف تحديث: يُفحص ويُجهَّز، ثم يُنشر لباقي الأجهزة، ثم يُعاد تشغيل النظام ليعمل بالإصدار الجديد."""
-    f = request.files.get("file")
-    if not f or not f.filename:
-        return jsonify(ok=False, error="اختر ملف التحديث أولًا"), 400
-    data = f.read(updater.MAX_TOTAL + 1)
-    try:
-        man = updater.stage(data, source="upload")
-    except updater.UpdateError as e:
-        audit("update_rejected", str(e)[:200])
-        return jsonify(ok=False, error=str(e)), 400
-    except Exception as e:
-        log.exception("update_upload")
-        return jsonify(ok=False, error=f"تعذر تجهيز التحديث: {e}"), 500
-    audit("update_staged", f"إصدار {man['build']} ({man.get('version', '')}) {man.get('notes', '')[:100]}")
-    pub_msg, pub_ok = "", None
-    if request.form.get("publish", "1") == "1":
-        updater.queue_publish(data, man)
-        pub_msg = updater.flush_outbox() or ""
-        pub_ok = not os.listdir(updater._outbox()) if os.path.isdir(updater._outbox()) else True
-    bootstrap.request_restart("now")
-    return jsonify(ok=True, build=man["build"], version=man.get("version", ""), published=pub_ok, publish_msg=pub_msg)
-
-
-@app.route("/updates/check", methods=["POST"])
-@login_required(MGR)
-def update_check():
-    return jsonify(ok=True, msg=updater.check_remote(force=True))
-
-
-@app.route("/updates/restart", methods=["POST"])
-@login_required(MGR)
-def update_restart():
-    if not updater.supported():
-        return jsonify(ok=False, error="غير متاح خارج نسخة سطح المكتب"), 400
-    audit("restart_for_update")
-    bootstrap.request_restart("now")
-    return jsonify(ok=True)
+                           is_admin=g.user["role"] == "admin")
 
 
 @app.route("/backups/download/<name>")
