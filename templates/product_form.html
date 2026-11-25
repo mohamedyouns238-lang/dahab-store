@@ -6,9 +6,10 @@
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <div class="f">
     <div><label>اسم المنتج *</label><input name="name" value="{{ p.get('name', '') }}" required></div>
-    <div><label>الباركود (امسحه بالقارئ أو اتركه فارغًا)</label>
-      <div class="row" style="flex-wrap:nowrap"><input name="barcode" id="barcode" value="{{ p.get('barcode') or '' }}" autocomplete="off" style="flex:1">
-      <button type="button" class="btn sec sm" id="gen">توليد</button></div></div>
+    <div><label>رقم الباركود (اتركه فارغًا ليُرقَّم تلقائيًا، أو امسح باركود المنتج بالقارئ)</label>
+      <input name="barcode" id="barcode" value="{{ p.get('barcode') or '' }}" autocomplete="off" placeholder="تلقائي"></div>
+    <div><label>🏷 عدد ملصقات الباركود التي تريد طباعتها بعد الحفظ</label>
+      <input name="labels_qty" type="number" min="0" max="500" value="0"></div>
     <div><label>الفئة</label><select name="category_id"><option value="">—</option>
       {% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if p.get('category_id')|string == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></div>
     <div><label>الماركة</label><select name="brand_id"><option value="">—</option>
@@ -32,10 +33,5 @@
 const bc = document.getElementById('barcode');
 bc.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); document.querySelector('[name=category_id]').focus(); } });
 document.getElementById('imgin').onchange = e => { const fl = e.target.files[0]; const im = document.getElementById('imgprev'); if (fl) { im.src = URL.createObjectURL(fl); im.style.display = ''; } };
-document.getElementById('gen').onclick = () => {
-  let d = '200' + Array.from({length: 9}, () => Math.floor(Math.random() * 10)).join('');
-  let s = 0; for (let i = 0; i < 12; i++) s += +d[i] * (i % 2 ? 3 : 1);
-  bc.value = d + ((10 - s % 10) % 10);
-};
 </script>
 {% endblock %}

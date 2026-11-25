@@ -22,6 +22,7 @@ from flask import (Flask, Response, abort, flash, g, jsonify, redirect,
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import qrcode_py
+import barcode128
 import safety
 
 BASE = safety.BASE
@@ -229,6 +230,16 @@ def init_db():
     c.executescript(SCHEMA)
     migrate(c)
     c.executescript(triggers_sql())
+    try:
+        c.execute("BEGIN IMMEDIATE")
+        assign_missing_barcodes(c)
+        c.execute("COMMIT")
+    except Exception:
+        log.exception("backfill barcodes")
+        try:
+            c.execute("ROLLBACK")
+        except Exception:
+            pass
     if not c.execute("SELECT 1 FROM users LIMIT 1").fetchone():
         pw = os.environ.get("ADMIN_PASSWORD", "admin123")
         c.execute("INSERT INTO users(username,password_hash,full_name,role,must_change) VALUES(?,?,?,?,1)",
@@ -431,6 +442,7 @@ NAV = [
     ("pos", "الكاشير", ALL),
     ("sales", "فواتير المبيعات", MGR),
     ("products", "المنتجات", MGR),
+    ("labels", "طباعة الباركود", MGR),
     ("offers", "العروض", ALL),
     ("settings_page", "إعدادات المتجر", MGR),
     ("simple:categories", "الفئات", MGR),
@@ -615,6 +627,38 @@ def products():
                            cats=cats, brands=brands, s=s, cat=cat, brand=brand, low=low)
 
 
+def _ean_check(d12):
+    return str((10 - sum(int(ch) * (3 if i % 2 else 1) for i, ch in enumerate(d12)) % 10) % 10)
+
+
+def next_barcode(c):
+    """رقم باركود تسلسلي جديد (13 رقمًا يبدأ بـ 200 للاستخدام الداخلي) لا يتكرر أبدًا."""
+    cfg = safety.load_config()
+    row = c.execute("SELECT MAX(CAST(substr(barcode,4,9) AS INTEGER)) FROM products "
+                    "WHERE length(barcode)=13 AND barcode GLOB '200[0-9]*'").fetchone()
+    n = max(int(cfg.get("barcode_seq") or 0), int(row[0] or 0))
+    while True:
+        n += 1
+        code = f"200{n % 1000000000:09d}"
+        code += _ean_check(code)
+        if not c.execute("SELECT 1 FROM products WHERE barcode=?", (code,)).fetchone():
+            break
+    try:
+        cfg["barcode_seq"] = n
+        safety.save_config(cfg)
+    except Exception:
+        log.exception("barcode_seq")
+    return code
+
+
+def assign_missing_barcodes(c):
+    """يرقّم كل منتج بلا باركود. يُستدعى عند التشغيل."""
+    ids = [r[0] for r in c.execute("SELECT id FROM products WHERE active=1 AND (barcode IS NULL OR barcode='') ORDER BY id")]
+    for pid in ids:
+        c.execute("UPDATE products SET barcode=? WHERE id=?", (next_barcode(c), pid))
+    return len(ids)
+
+
 def parse_product(f, pid=None):
     name = f.get("name", "").strip()
     if not name:
@@ -651,10 +695,16 @@ def product_new():
             with tx() as c:
                 pid = c.execute("""INSERT INTO products(name,barcode,category_id,brand_id,cost,price,stock,min_qty,image)
                                    VALUES(:name,:barcode,:category_id,:brand_id,:cost,:price,0,:min_qty,:image)""", p).lastrowid
+                if not p["barcode"]:
+                    p["barcode"] = next_barcode(c)
+                    c.execute("UPDATE products SET barcode=? WHERE id=?", (p["barcode"], pid))
                 if p["stock"]:
                     move(c, pid, p["stock"], "opening", note="رصيد عند إضافة المنتج")
-            audit("product_add", f"#{pid} {p['name']} مخزون={p['stock']}")
-            flash("تمت إضافة المنتج", "ok")
+            audit("product_add", f"#{pid} {p['name']} باركود={p['barcode']} مخزون={p['stock']}")
+            flash(f"تمت إضافة المنتج — الباركود: {p['barcode']}", "ok")
+            nlab = request.form.get("labels_qty", type=int) or 0
+            if nlab > 0:
+                return redirect(url_for("labels", pid=pid, qty=min(nlab, 500)))
             return redirect(url_for("product_new") if request.form.get("again") else url_for("products"))
     cats, brands = lookups()
     return render_template("product_form.html", p=p, cats=cats, brands=brands, new=True)
@@ -678,6 +728,8 @@ def product_edit(pid):
             p = request.form
         else:
             with tx() as c:
+                if not p["barcode"]:
+                    p["barcode"] = next_barcode(c)
                 c.execute("""UPDATE products SET name=:name,barcode=:barcode,category_id=:category_id,brand_id=:brand_id,
                              cost=:cost,price=:price,min_qty=:min_qty WHERE id=:id""", {**p, "id": pid})
                 cur = c.execute("SELECT stock FROM products WHERE id=?", (pid,)).fetchone()["stock"]
@@ -696,6 +748,9 @@ def product_edit(pid):
             if scalar("SELECT COUNT(*) FROM offers WHERE active=1 AND product_id=?", (pid,)):
                 mark_site_dirty()                     # سعر/صورة المنتج ظاهرة في صفحة العروض
             flash("تم حفظ التعديلات", "ok")
+            nlab = request.form.get("labels_qty", type=int) or 0
+            if nlab > 0:
+                return redirect(url_for("labels", pid=pid, qty=min(nlab, 500)))
             return redirect(url_for("products"))
     cats, brands = lookups(old["category_id"], old["brand_id"])
     return render_template("product_form.html", p=p, cats=cats, brands=brands, new=False, pid=pid)
@@ -757,6 +812,75 @@ def media(name):
         abort(404)
     return send_from_directory(safety.IMAGE_DIR, name, max_age=2592000)
 
+
+
+# ------------------------------------------------------- طباعة ملصقات الباركود
+LABEL_SIZES = {"50x30": (50, 30), "40x25": (40, 25), "38x25": (38, 25), "58x40": (58, 40), "a4": None}
+MAX_LABELS = 3000
+
+
+@app.route("/labels")
+@login_required(MGR)
+def labels():
+    s = request.args.get("q", "").strip()
+    pid = request.args.get("pid", type=int)
+    qty = max(0, min(request.args.get("qty", type=int) or 0, 500))
+    sql, args = "SELECT id,name,barcode,price,stock FROM products WHERE active=1", []
+    if pid:
+        sql += " AND id=?"
+        args.append(pid)
+    if s:
+        sql += " AND (name LIKE ? OR barcode LIKE ?)"
+        args += [f"%{s}%", f"%{s}%"]
+    rows, page, pages, total = paged(sql + " ORDER BY name", tuple(args), request.args.get("page", 1, int), 50)
+    return render_template("labels.html", rows=rows, page=page, pages=pages, total=total, s=s, pid=pid, qty=qty)
+
+
+@app.route("/labels/print", methods=["POST"])
+@login_required(MGR)
+def labels_print():
+    want = {}
+    for k, v in request.form.items():
+        if k.startswith("q_") and k[2:].isdigit():
+            try:
+                n = max(0, min(int(v or 0), 500))
+            except ValueError:
+                n = 0
+            if n:
+                want[int(k[2:])] = n
+    if not want:
+        flash("اكتب عدد الملصقات لمنتج واحد على الأقل", "err")
+        return redirect(url_for("labels"))
+    if sum(want.values()) > MAX_LABELS:
+        flash(f"الحد الأقصى {MAX_LABELS} ملصق في المرة الواحدة", "err")
+        return redirect(url_for("labels"))
+    size = request.form.get("size", "50x30")
+    size = size if size in LABEL_SIZES else "50x30"
+    items, skipped = [], 0
+    with tx() as c:
+        for pid, n in want.items():
+            p = c.execute("SELECT id,name,barcode,price FROM products WHERE id=? AND active=1", (pid,)).fetchone()
+            if not p:
+                continue
+            code = p["barcode"]
+            if not code:
+                code = next_barcode(c)
+                c.execute("UPDATE products SET barcode=? WHERE id=?", (code, pid))
+            try:
+                svg = barcode128.svg(code)
+            except ValueError:
+                skipped += 1
+                continue
+            items += [dict(name=p["name"], code=code, price=p["price"], svg=svg)] * n
+    if skipped:
+        flash(f"تعذّر طباعة {skipped} منتج لأن باركوده يحتوي حروفًا عربية أو رموزًا غير مدعومة", "err")
+    if not items:
+        return redirect(url_for("labels"))
+    audit("labels_print", f"{len(items)} ملصق / {len(want)} منتج / مقاس {size}")
+    w, h = LABEL_SIZES[size] or (0, 0)
+    return render_template("labels_print.html", items=items, size=size, w=w, h=h,
+                           show_price=bool(request.form.get("show_price")), show_name=bool(request.form.get("show_name")),
+                           store=STORE_NAME)
 
 # ------------------------------------------- إعدادات المتجر (رقم التليفون)
 def shop_info():

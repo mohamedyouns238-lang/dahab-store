@@ -280,6 +280,8 @@ def selftest(url):
             A.app.jinja_env.get_template(n)
         qr = sys.modules["qrcode_py"].matrix("https://example.com/")
         assert len(qr) >= 21, "qr"
+        bcs = A.barcode128.svg("2000000000017")
+        assert bcs.startswith("<svg") and len(bcs) > 200, "barcode"
         print("SELFTEST OK")
         return 0
     except Exception as e:

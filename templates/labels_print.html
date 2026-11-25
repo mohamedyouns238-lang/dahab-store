@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ملصقات الباركود</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#eee;font-family:Tahoma,Arial,sans-serif;color:#000}
+.bar{position:sticky;top:0;background:#222;color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;z-index:5}
+.bar button{padding:8px 18px;font-size:15px;cursor:pointer;border:0;border-radius:6px;background:#c9a227;font-weight:bold}
+.sheet{display:flex;flex-wrap:wrap;gap:6px;padding:12px;justify-content:center}
+.lb{background:#fff;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:1px dashed #aaa}
+.lb .nm{font-size:8pt;font-weight:bold;line-height:1.15;max-height:2.4em;overflow:hidden;width:100%}
+.lb .bc{width:92%}
+.lb .bc svg{width:100%;height:100%;display:block}
+.lb .no{font:7.5pt "Courier New",monospace;letter-spacing:.5px;direction:ltr}
+.lb .pr{font-size:9pt;font-weight:bold}
+{% if size == 'a4' %}
+.lb{width:63mm;height:34mm;padding:1.5mm 2mm;break-inside:avoid}
+.lb .bc{height:13mm}
+@page{size:A4;margin:8mm}
+{% else %}
+.lb{width:{{ w }}mm;height:{{ h }}mm;padding:1.2mm 1.8mm;page-break-after:always;break-after:page}
+.lb .bc{height:{{ (h * 0.40)|round(1) }}mm}
+@page{size:{{ w }}mm {{ h }}mm;margin:0}
+{% endif %}
+@media print{
+  body{background:#fff}.bar{display:none}
+  .sheet{padding:0;gap:0;display:block}
+  {% if size == 'a4' %}.sheet{display:flex;flex-wrap:wrap;justify-content:flex-start}{% endif %}
+  .lb{border:0}
+}
+</style></head><body>
+<div class="bar"><button onclick="window.print()">🖨 طباعة ({{ items|length }} ملصق)</button>
+<span>في نافذة الطباعة: الهوامش «بلا» والمقياس 100%</span><button style="background:#ddd" onclick="window.close()">إغلاق</button></div>
+<div class="sheet">
+{% for it in items %}
+<div class="lb">
+  {% if show_name %}<div class="nm">{{ it.name }}</div>{% endif %}
+  <div class="bc">{{ it.svg|safe }}</div>
+  <div class="no">{{ it.code }}</div>
+  {% if show_price %}<div class="pr">{{ '%g'|format(it.price) }} ج.م</div>{% endif %}
+</div>
+{% endfor %}
+</div>
+<script>window.addEventListener('load',()=>setTimeout(()=>{try{window.print()}catch(e){}},500));</script>
+</body></html>

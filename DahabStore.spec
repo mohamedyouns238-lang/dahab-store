@@ -5,7 +5,7 @@ a = Analysis(
     ["dahab_app.py"],
     pathex=["."],
     datas=[("templates", "templates"), ("static", "static"), ("assets", "assets")],
-    hiddenimports=["app", "safety", "qrcode_py", "urllib.request", "waitress", "PIL", "PIL.Image", "PIL.ImageOps", "sqlite3"],
+    hiddenimports=["app", "safety", "qrcode_py","barcode128", "urllib.request", "waitress", "PIL", "PIL.Image", "PIL.ImageOps", "sqlite3"],
     excludes=["tkinter", "matplotlib", "numpy", "pandas", "scipy", "pytest"],
     noarchive=False,
 )

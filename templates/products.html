@@ -5,7 +5,7 @@
 <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
   <h2 style="margin:0">المنتجات <span class="muted" style="font-size:14px">({{ total }})</span></h2>
   <div class="row">
-    {% if g.user['role'] != 'cashier' %}<a class="btn sec" href="{{ url_for('export_inventory') }}">تصدير المخزون CSV</a><a class="btn" href="{{ url_for('product_new') }}">+ منتج جديد</a>{% endif %}
+    {% if g.user['role'] != 'cashier' %}<a class="btn sec" href="{{ url_for('labels') }}">🏷 طباعة الباركود</a><a class="btn sec" href="{{ url_for('export_inventory') }}">تصدير المخزون CSV</a><a class="btn" href="{{ url_for('product_new') }}">+ منتج جديد</a>{% endif %}
   </div>
 </div>
 <form class="card row" method="get">
@@ -25,7 +25,7 @@
     {% if g.user['role'] != 'cashier' %}<td class="num">{{ p.cost|money }}</td>{% endif %}
     <td class="num">{{ p.price|money }}</td>
     <td class="num {{ 'low' if p.stock <= p.min_qty }}">{{ p.stock }}</td><td class="num">{{ p.min_qty }}</td>
-    {% if g.user['role'] != 'cashier' %}<td class="row"><a class="btn sec sm" href="{{ url_for('product_edit', pid=p.id) }}">تعديل</a>
+    {% if g.user['role'] != 'cashier' %}<td class="row"><a class="btn sec sm" href="{{ url_for('labels', pid=p.id, qty=(p.stock if p.stock > 0 else 1)) }}" title="طباعة ملصقات الباركود">🏷</a><a class="btn sec sm" href="{{ url_for('product_edit', pid=p.id) }}">تعديل</a>
       <form method="post" action="{{ url_for('product_delete', pid=p.id) }}" onsubmit="return confirm('حذف المنتج؟')">{{ csrf() }}<button class="btn red sm">حذف</button></form></td>{% endif %}
   </tr>
   {% else %}<tr><td colspan="10" class="muted">لا توجد منتجات</td></tr>{% endfor %}

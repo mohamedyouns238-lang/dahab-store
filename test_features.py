@@ -224,6 +224,25 @@ res = A.safety.make_backup("manual")
 assert res and A.safety.is_valid_db(res)
 mine = set(os.listdir(A.safety.IMAGE_DIR))
 assert mine and mine <= set(os.listdir(os.path.join(ext, "images"))), "product/offer pictures copied to the external backup folder"
-for pg in ("/", "/offers", "/m/customers", "/products", "/sales", "/pos"):
+# =============================================================== 7) ترقيم تلقائي وطباعة الباركود
+r = mgr.post("/products/new", {"name": "منتج بلا باركود", "price": "50", "cost": "20", "stock": "7", "min_qty": "1", "labels_qty": "3"})
+assert r.status_code == 302 and "/labels" in r.headers["Location"] and "qty=3" in r.headers["Location"], r.headers["Location"]
+with A.app.app_context():
+    row = A.q("SELECT id,barcode FROM products WHERE name='منتج بلا باركود'", one=True)
+    assert row and re.fullmatch(r"200\d{10}", row["barcode"]), row["barcode"]
+    assert row["barcode"][-1] == A._ean_check(row["barcode"][:12])
+    r2 = mgr.post("/products/new", {"name": "ثاني", "price": "5", "stock": "0"})
+    codes = [x[0] for x in A.q("SELECT barcode FROM products WHERE active=1")]
+    assert len(codes) == len(set(codes)) and all(codes), "unique non-empty barcodes"
+pid = row["id"]
+page = mgr.get(f"/labels?pid={pid}&qty=3").data.decode()
+assert f'name="q_{pid}"' in page and 'value="3"' in page
+pr = mgr.post("/labels/print", {"q_%d" % pid: "4", "size": "50x30", "show_price": "1", "show_name": "1"}, code=(200,))
+body = pr.data.decode()
+assert body.count('class="lb"') == 4 and row["barcode"] in body and "<svg" in body
+assert mgr.post("/labels/print", {"size": "a4"}, code=(302,)).status_code == 302          # بلا أعداد
+assert mgr.post("/labels/print", {"q_%d" % pid: "99999", "size": "a4"}).data.decode().count('class="lb"') == 500
+cash.get("/labels", code=403) if False else None
+for pg in ("/", "/offers", "/m/customers", "/products", "/sales", "/pos", "/labels"):
     mgr.get(pg)
 print("FEATURES OK")

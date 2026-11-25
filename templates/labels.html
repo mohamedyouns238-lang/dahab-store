@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, csrf with context %}
+{% block title %}طباعة الباركود{% endblock %}
+{% block content %}
+<h2>🏷 طباعة ملصقات الباركود</h2>
+<p class="muted">كل منتج له رقم باركود تلقائي. اكتب عدد الملصقات المطلوب لكل منتج ثم اضغط «طباعة»، والصق الملصق على المنتج. الكاشير يمسحه بالقارئ فيظهر المنتج فورًا.</p>
+<form class="card row" method="get">
+  <div><label>بحث بالاسم أو الرقم</label><input name="q" value="{{ s }}" {{ '' if pid else 'autofocus' }}></div>
+  <button class="btn">بحث</button>
+  {% if pid or s %}<a class="btn sec" href="{{ url_for('labels') }}">عرض كل المنتجات</a>{% endif %}
+</form>
+<form method="post" action="{{ url_for('labels_print') }}" target="_blank" class="card" id="lf">
+  {{ csrf() }}
+  <div class="row" style="align-items:flex-end;margin-bottom:12px">
+    <div><label>مقاس الملصق</label>
+      <select name="size" id="size">
+        <option value="50x30">50 × 30 مم (طابعة ملصقات)</option>
+        <option value="40x25">40 × 25 مم</option>
+        <option value="38x25">38 × 25 مم</option>
+        <option value="58x40">58 × 40 مم</option>
+        <option value="a4">ورق A4 (3 أعمدة)</option>
+      </select></div>
+    <label style="margin:0;color:inherit"><input type="checkbox" name="show_name" value="1" checked> اسم المنتج</label>
+    <label style="margin:0;color:inherit"><input type="checkbox" name="show_price" value="1" checked> السعر</label>
+    <button type="button" class="btn sec sm" id="fillstock">العدد = الكمية بالمخزون</button>
+    <button type="button" class="btn sec sm" id="fillone">1 لكل منتج</button>
+    <button type="button" class="btn sec sm" id="fillzero">تصفير</button>
+    <button class="btn">🖨 طباعة</button>
+  </div>
+  <div class="tw"><table>
+    <tr><th>الرقم (الباركود)</th><th>المنتج</th><th>السعر</th><th>المخزون</th><th>عدد الملصقات</th></tr>
+    {% for p in rows %}
+    <tr><td class="num">{{ p.barcode or 'سيُرقَّم عند الطباعة' }}</td><td>{{ p.name }}</td><td class="num">{{ p.price|money }}</td>
+      <td class="num">{{ p.stock }}</td>
+      <td><input class="qn" data-stock="{{ p.stock }}" name="q_{{ p.id }}" type="number" min="0" max="500" value="{{ qty if pid else 0 }}" style="width:90px"></td></tr>
+    {% else %}<tr><td colspan="5" class="muted">لا توجد منتجات</td></tr>{% endfor %}
+  </table></div>
+  <p class="muted" style="margin-bottom:0">إجمالي المنتجات المطابقة: {{ total }} — الأعداد تُطبع للمنتجات الظاهرة في هذه الصفحة فقط، فاطبع كل صفحة على حدة.</p>
+</form>
+{{ pager(page, pages) }}
+<script>
+const sz = document.getElementById('size');
+try { const v = localStorage.getItem('lblsize'); if (v) sz.value = v; } catch (e) {}
+sz.onchange = () => { try { localStorage.setItem('lblsize', sz.value); } catch (e) {} };
+const qs = () => document.querySelectorAll('.qn');
+document.getElementById('fillstock').onclick = () => qs().forEach(i => i.value = Math.min(500, Math.max(0, +i.dataset.stock || 0)));
+document.getElementById('fillone').onclick = () => qs().forEach(i => i.value = 1);
+document.getElementById('fillzero').onclick = () => qs().forEach(i => i.value = 0);
+</script>
+{% endblock %}
